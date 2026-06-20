@@ -19,6 +19,12 @@
 // Hostname for mDNS. Once connected, the UI is reachable at http://<HOST>.local
 #define DEVICE_HOSTNAME "relay"
 
+// Append a lowercase MAC-derived suffix to DEVICE_HOSTNAME (e.g. "relay-3a9c")
+// so multiple identical boards stay unique on the network. The same name is
+// used for the mDNS/OTA hostname AND the AP setup hotspot SSID. Set 0 to use
+// DEVICE_HOSTNAME verbatim.
+#define HOSTNAME_AUTO_SUFFIX 1
+
 // Seconds to wait for WiFi before giving up. On failure the device starts its
 // own setup hotspot (AP mode) so you can enter credentials from a phone.
 #define WIFI_CONNECT_TIMEOUT_S 20
@@ -30,7 +36,9 @@
 // ----------------------------------------------------------------------------
 // AP (setup hotspot) — used when WiFi can't connect / on first boot
 // ----------------------------------------------------------------------------
-#define AP_SSID     "Relay-Setup"
+// The hotspot SSID is the device hostname (DEVICE_HOSTNAME + optional MAC
+// suffix above), so the network name you see while provisioning matches the
+// name the device uses on your LAN.
 // Open network by default. For a secured hotspot set 8+ characters here.
 #define AP_PASSWORD ""
 

@@ -13,6 +13,7 @@
 #include "setup_ui.h"
 #include "display.h"
 #include "motion.h"
+#include "identity.h"
 
 // ============================================================================
 // WIRING GUIDE
@@ -157,7 +158,7 @@ String statusJson() {
   String s = "{\"wifi\":{";
   s += "\"connected\":" + String(up ? "true" : "false");
   s += ",\"apMode\":" + String(apMode ? "true" : "false");
-  s += ",\"ssid\":\"" + (apMode ? String(AP_SSID) : wifiSsid()) + "\"";
+  s += ",\"ssid\":\"" + (apMode ? deviceHostname() : wifiSsid()) + "\"";
   s += ",\"ip\":\"" + (apMode ? WiFi.softAPIP().toString()
                               : (up ? WiFi.localIP().toString() : String("0.0.0.0"))) + "\"";
   s += ",\"rssi\":" + String(up ? WiFi.RSSI() : 0);
@@ -395,16 +396,16 @@ void startAPMode() {
   apMode = true;
   WiFi.mode(WIFI_AP);
   bool secured = strlen(AP_PASSWORD) >= 8;
-  if (secured) WiFi.softAP(AP_SSID, AP_PASSWORD);
-  else         WiFi.softAP(AP_SSID);
+  if (secured) WiFi.softAP(deviceHostname().c_str(), AP_PASSWORD);
+  else         WiFi.softAP(deviceHostname().c_str());
   IPAddress ip = WiFi.softAPIP();
   dnsServer.start(DNS_PORT, "*", ip); // captive portal: resolve everything to us
-  Serial.printf("[ap] setup hotspot \"%s\" (%s)\n", AP_SSID, secured ? "secured" : "open");
+  Serial.printf("[ap] setup hotspot \"%s\" (%s)\n", deviceHostname().c_str(), secured ? "secured" : "open");
   Serial.printf("[ap] join it, then browse to http://%s/\n", ip.toString().c_str());
 }
 
 void setupArduinoOTA() {
-  ArduinoOTA.setHostname(DEVICE_HOSTNAME);
+  ArduinoOTA.setHostname(deviceHostname().c_str());
   if (strlen(OTA_PASSWORD) > 0) ArduinoOTA.setPassword(OTA_PASSWORD);
   ArduinoOTA.onStart([]() { Serial.println("[ota] ArduinoOTA start"); });
   ArduinoOTA.onEnd([]()   { Serial.println("\n[ota] ArduinoOTA done"); });
@@ -418,7 +419,7 @@ bool connectWiFi() {
   String pass = wifiPass();
   Serial.printf("[wifi] connecting to \"%s\" ", ssid.c_str());
   WiFi.mode(WIFI_STA);
-  WiFi.setHostname(DEVICE_HOSTNAME);
+  WiFi.setHostname(deviceHostname().c_str());
   WiFi.begin(ssid.c_str(), pass.c_str());
 
   unsigned long deadline = millis() + (unsigned long)WIFI_CONNECT_TIMEOUT_S * 1000UL;
@@ -440,10 +441,10 @@ bool connectWiFi() {
   configTzTime(TZ_INFO, NTP_SERVER);
   Serial.printf("[time] NTP sync requested (%s, TZ %s)\n", NTP_SERVER, TZ_INFO);
 
-  if (MDNS.begin(DEVICE_HOSTNAME)) {
+  if (MDNS.begin(deviceHostname().c_str())) {
     MDNS.addService("http", "tcp", WEB_SERVER_PORT);
     Serial.printf("[wifi] UI at http://%s.local/  or  http://%s/\n",
-                  DEVICE_HOSTNAME, WiFi.localIP().toString().c_str());
+                  deviceHostname().c_str(), WiFi.localIP().toString().c_str());
   }
   setupArduinoOTA();
   return true;
@@ -459,7 +460,8 @@ void renderDisplay() {
   DisplayInfo d;
   d.apMode = apMode;
   d.wifiConnected = WiFi.status() == WL_CONNECTED;
-  d.ssid = apMode ? String(AP_SSID) : wifiSsid();
+  d.ssid = apMode ? deviceHostname() : wifiSsid();
+  d.hostname = deviceHostname();
   d.ip = apMode ? WiFi.softAPIP().toString()
                 : (d.wifiConnected ? WiFi.localIP().toString() : String("--"));
   d.rssi = d.wifiConnected ? WiFi.RSSI() : 0;

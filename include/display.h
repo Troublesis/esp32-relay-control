@@ -15,6 +15,7 @@ struct DisplayInfo {
   bool motionEnabled;         // PIR sensor compiled in
   bool motionActive;          // PIR currently detecting motion
   const char* version;
+  String hostname;            // mDNS name for the footer (e.g. "relay-3a9c")
 };
 
 // Initialise the I2C OLED. Returns false if no panel responds (rendering then

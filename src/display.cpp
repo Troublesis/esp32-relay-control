@@ -146,7 +146,7 @@ void displayRender(const DisplayInfo& info) {
   oled.setTextColor(SSD1306_WHITE);
   oled.setCursor(0, 56);
   if (info.apMode) oled.print("Join AP to set WiFi");
-  else             oled.print(String(DEVICE_HOSTNAME) + ".local");
+  else             oled.print(info.hostname + ".local");
 
   // Right-aligned PIR tag in the footer: filled dot = motion, hollow = clear.
   if (info.motionEnabled) {

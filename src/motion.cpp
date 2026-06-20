@@ -1,5 +1,6 @@
 #include "motion.h"
 #include "config.h"
+#include "identity.h"
 
 #include <string.h>
 #include <time.h>
@@ -92,7 +93,9 @@ static String barkBody(const MotionEvent& ev) {
     body += "\nTime: ";
     body += ts;
   }
-  body += "\nDevice: " DEVICE_HOSTNAME ".local";
+  body += "\nDevice: ";
+  body += deviceHostname();
+  body += ".local";
   return body;
 }
 
