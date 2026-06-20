@@ -24,18 +24,63 @@
 static Adafruit_SSD1306 oled(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
 static bool ready = false;
 
-bool displayBegin() {
-  Wire.begin(OLED_SDA, OLED_SCL);
-  ready = oled.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR);
-  if (!ready) {
-    Serial.println("[oled] SSD1306 not found — display disabled");
-    return false;
+// Does a device ACK at `addr` on the given pins? Adafruit_SSD1306::begin() does
+// NOT verify the panel actually responds on I2C (it returns true even with the
+// wrong pin, then silently NAKs every write — "ready" in the log, blank glass),
+// so we probe the bus ourselves before trusting it.
+static bool i2cPresent(int sda, int scl, uint8_t addr) {
+  Wire.begin(sda, scl);
+  delay(10);
+  Wire.beginTransmission(addr);
+  return Wire.endTransmission() == 0; // 0 = address ACKed
+}
+
+// Log every device answering on the active I2C bus (diagnostic on failure).
+static void i2cScan() {
+  byte found = 0;
+  Serial.print("[oled] I2C scan:");
+  for (byte a = 1; a < 127; a++) {
+    Wire.beginTransmission(a);
+    if (Wire.endTransmission() == 0) { Serial.printf(" 0x%02X", a); found++; }
   }
-  oled.clearDisplay();
-  oled.setTextColor(SSD1306_WHITE);
-  oled.display();
-  Serial.println("[oled] ready");
-  return true;
+  Serial.println(found ? "" : " (no devices found)");
+}
+
+bool displayBegin() {
+  // Try the configured pins/address first, then the alternate I2C address
+  // (0x3C<->0x3D) and the other common SDA pin (21<->23). A board wired slightly
+  // differently — or with OLED_SDA left at the wrong default — still lights up,
+  // and the working combo is logged so you can lock it into config.h.
+  const uint8_t altAddr = (OLED_ADDR == 0x3C) ? 0x3D : 0x3C;
+  const int     altSda  = (OLED_SDA == 21) ? 23 : 21;
+  const struct { int sda; int scl; uint8_t addr; } combos[] = {
+    { OLED_SDA, OLED_SCL, (uint8_t)OLED_ADDR },
+    { OLED_SDA, OLED_SCL, altAddr },
+    { altSda,   OLED_SCL, (uint8_t)OLED_ADDR },
+    { altSda,   OLED_SCL, altAddr },
+  };
+
+  for (auto& c : combos) {
+    if (!i2cPresent(c.sda, c.scl, c.addr)) continue;
+    Wire.begin(c.sda, c.scl);
+    if (!oled.begin(SSD1306_SWITCHCAPVCC, c.addr)) continue; // buffer alloc failed
+    ready = true;
+    oled.clearDisplay();
+    oled.setTextColor(SSD1306_WHITE);
+    oled.display();
+    if (c.sda == OLED_SDA && c.addr == OLED_ADDR)
+      Serial.printf("[oled] ready (SDA=%d SCL=%d addr=0x%02X)\n", c.sda, c.scl, c.addr);
+    else
+      Serial.printf("[oled] ready via FALLBACK (SDA=%d addr=0x%02X) — set OLED_SDA=%d / OLED_ADDR=0x%02X in config.h\n",
+                    c.sda, c.addr, c.sda, c.addr);
+    return true;
+  }
+
+  // Nothing answered anywhere — scan the configured bus so the cause is visible.
+  Wire.begin(OLED_SDA, OLED_SCL);
+  i2cScan();
+  Serial.println("[oled] SSD1306 not found — display disabled (check wiring/power/pins)");
+  return false;
 }
 
 void displaySplash(const char* line1, const char* line2) {

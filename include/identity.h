@@ -20,8 +20,12 @@ inline const String& deviceHostname() {
     name = DEVICE_HOSTNAME;
 #if HOSTNAME_AUTO_SUFFIX
     char suffix[6];
+    // getEfuseMac() packs the 6 MAC bytes little-endian, so the high 16 bits of
+    // the integer are the LAST two octets of the MAC — the device-unique tail
+    // (the leading 3 octets are the shared Espressif OUI). Each board therefore
+    // gets a distinct suffix, so multiple units never collide on the LAN.
     snprintf(suffix, sizeof(suffix), "-%04x",
-             (uint16_t)(ESP.getEfuseMac() >> 32)); // top 2 octets of the MAC
+             (uint16_t)(ESP.getEfuseMac() >> 32));
     name += suffix;
 #endif
     name.toLowerCase();
