@@ -59,7 +59,7 @@ void displaySplash(const char* line1, const char* line2) {
 }
 
 // One relay status line in the blue area: "R1 [ON ] AUTO 12s".
-static void drawRelayRow(int y, int idx, const DisplayInfo& info) {
+static void drawRelayRow(int y, int idx, const DisplayInfo& info, bool showCountdown) {
   oled.setTextSize(1);
   oled.setTextColor(SSD1306_WHITE);
 
@@ -86,8 +86,9 @@ static void drawRelayRow(int y, int idx, const DisplayInfo& info) {
   oled.setCursor(52, y + 2);
   oled.print(info.relayAuto[idx] ? "AUTO" : "MAN");
 
-  // Auto countdown (right aligned-ish)
-  if (info.relayAuto[idx]) {
+  // Auto countdown (right aligned-ish) — hidden when the motion box claims the
+  // right side of the blue area; the live value stays available in the WebUI.
+  if (showCountdown && info.relayAuto[idx]) {
     char buf[8];
     snprintf(buf, sizeof(buf), "%lus", info.remaining[idx]);
     int16_t x1, y1; uint16_t w, h;
@@ -95,6 +96,32 @@ static void drawRelayRow(int y, int idx, const DisplayInfo& info) {
     oled.setCursor(OLED_WIDTH - w, y + 2);
     oled.print(buf);
   }
+}
+
+// Two-line motion indicator down the right side of the blue area. Mirrors the
+// relay "pill" invert: outlined with the label showing when idle, fully filled
+// with the label knocked out to black when motion is live.
+//   NOTE: this lower region of the two-colour panel is physically BLUE (only the
+//   top 16 px band is yellow), so the box renders blue regardless of draw colour.
+//   "Motion Detected" is trimmed to "Motion" / "Detect" to fit the box width.
+static void drawMotionBox(const DisplayInfo& info) {
+  const int x = 84, y = 20, w = 44, h = 32;
+  bool on = info.motionActive;
+
+  if (on) oled.fillRoundRect(x, y, w, h, 4, SSD1306_WHITE);
+  else    oled.drawRoundRect(x, y, w, h, 4, SSD1306_WHITE);
+  oled.setTextColor(on ? SSD1306_BLACK : SSD1306_WHITE);
+
+  oled.setTextSize(1);
+  const char* lines[2] = { "Motion", "Detect" };
+  const int   ly[2]    = { y + 7, y + 18 };
+  for (int i = 0; i < 2; i++) {
+    int16_t bx, by; uint16_t bw, bh;
+    oled.getTextBounds(lines[i], 0, 0, &bx, &by, &bw, &bh);
+    oled.setCursor(x + (w - (int)bw) / 2, ly[i]);
+    oled.print(lines[i]);
+  }
+  oled.setTextColor(SSD1306_WHITE); // restore for later draws
 }
 
 void displayRender(const DisplayInfo& info) {
@@ -138,28 +165,18 @@ void displayRender(const DisplayInfo& info) {
 
   oled.drawFastHLine(0, 16, OLED_WIDTH, SSD1306_WHITE);
 
-  // ---- Blue area: relays ----
-  drawRelayRow(22, 0, info);
-  drawRelayRow(40, 1, info);
+  // ---- Blue area: relays (left) + motion box (right) ----
+  bool showMotion = info.motionEnabled;
+  drawRelayRow(22, 0, info, !showMotion); // countdown yields to the motion box
+  drawRelayRow(40, 1, info, !showMotion);
+  if (showMotion) drawMotionBox(info);
 
   // ---- Footer hint ----
   oled.setTextColor(SSD1306_WHITE);
   oled.setCursor(0, 56);
   if (info.apMode) oled.print("Join AP to set WiFi");
   else             oled.print(info.hostname + ".local");
-
-  // Right-aligned PIR tag in the footer: filled dot = motion, hollow = clear.
-  if (info.motionEnabled) {
-    const char* tag = "PIR";
-    int16_t x1, y1; uint16_t w, h;
-    oled.getTextBounds(tag, 0, 0, &x1, &y1, &w, &h);
-    int dotX = OLED_WIDTH - 4;
-    int tagX = dotX - 4 - w;
-    oled.setCursor(tagX, 56);
-    oled.print(tag);
-    if (info.motionActive) oled.fillCircle(dotX, 59, 2, SSD1306_WHITE);
-    else                   oled.drawCircle(dotX, 59, 2, SSD1306_WHITE);
-  }
+  // (The standalone footer PIR tag is gone — the motion box above now shows it.)
 
   oled.display();
 }
