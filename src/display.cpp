@@ -148,5 +148,18 @@ void displayRender(const DisplayInfo& info) {
   if (info.apMode) oled.print("Join AP to set WiFi");
   else             oled.print(String(DEVICE_HOSTNAME) + ".local");
 
+  // Right-aligned PIR tag in the footer: filled dot = motion, hollow = clear.
+  if (info.motionEnabled) {
+    const char* tag = "PIR";
+    int16_t x1, y1; uint16_t w, h;
+    oled.getTextBounds(tag, 0, 0, &x1, &y1, &w, &h);
+    int dotX = OLED_WIDTH - 4;
+    int tagX = dotX - 4 - w;
+    oled.setCursor(tagX, 56);
+    oled.print(tag);
+    if (info.motionActive) oled.fillCircle(dotX, 59, 2, SSD1306_WHITE);
+    else                   oled.drawCircle(dotX, 59, 2, SSD1306_WHITE);
+  }
+
   oled.display();
 }

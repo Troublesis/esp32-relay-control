@@ -6,11 +6,13 @@
 #include <DNSServer.h>
 #include <ArduinoOTA.h>
 #include <Update.h>
+#include <time.h>
 
 #include "config.h"
 #include "web_ui.h"
 #include "setup_ui.h"
 #include "display.h"
+#include "motion.h"
 
 // ============================================================================
 // WIRING GUIDE
@@ -32,6 +34,13 @@
 //   OLED SDA  -->  ESP32 GPIO 21
 //   The top 16 px (yellow) shows title + network; the blue area shows relays.
 //   See include/display.h / src/display.cpp. Set OLED_ENABLED 0 to skip it.
+//
+// PIR motion sensor HS-S38P (or any HIGH-on-motion PIR):
+//   PIR VCC  -->  ESP32 3V3
+//   PIR GND  -->  ESP32 GND
+//   PIR S    -->  ESP32 GPIO 4   (PIR_PIN)
+//   Signal goes HIGH on motion, LOW after the sensor's hold time. The WebUI
+//   shows live state + a timestamped history log. Set PIR_ENABLED 0 to skip it.
 //
 // Pins / active state / WiFi credentials are all configured in include/config.h
 //
@@ -158,7 +167,8 @@ String statusJson() {
   s += ",\"heap\":" + String(ESP.getFreeHeap());
   s += "},\"relays\":[";
   s += relayJson(relays[0], 1) + "," + relayJson(relays[1], 2);
-  s += "]}";
+  s += "],\"motion\":" + motionStatusJson();
+  s += "}";
   return s;
 }
 
@@ -281,6 +291,24 @@ void handleWifiReset() {
 }
 
 // ----------------------------------------------------------------------------
+// HTTP route handlers — PIR motion sensor
+// ----------------------------------------------------------------------------
+
+// GET/POST /api/motion/log[?since=N] -> events with seq > N (oldest first).
+// The WebUI passes the highest seq it has seen so only new events come back.
+void handleMotionLog() {
+  unsigned long since = server.hasArg("since")
+                          ? (unsigned long)server.arg("since").toInt() : 0UL;
+  server.send(200, "application/json", motionLogJson(since));
+}
+
+// POST/GET /api/motion/clear -> wipe the in-RAM history log.
+void handleMotionClear() {
+  motionClearLog();
+  server.send(200, "application/json", "{\"ok\":true}");
+}
+
+// ----------------------------------------------------------------------------
 // HTTP route handlers — OTA (browser firmware upload)
 // ----------------------------------------------------------------------------
 
@@ -350,6 +378,9 @@ void setupRoutes() {
   onGetPost("/api/wifi", handleWifiSave);
   onGetPost("/api/wifi/reset", handleWifiReset);
 
+  onGetPost("/api/motion/log", handleMotionLog);
+  onGetPost("/api/motion/clear", handleMotionClear);
+
   server.on("/update", HTTP_GET, handleUpdatePage);
   server.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
 
@@ -402,6 +433,13 @@ bool connectWiFi() {
   }
 
   Serial.printf("\n[wifi] connected. IP: %s\n", WiFi.localIP().toString().c_str());
+
+  // Kick off NTP so the motion log can show real timestamps (non-blocking;
+  // the clock becomes valid a few seconds later in the background). TZ_INFO is a
+  // POSIX TZ string so DST is applied automatically per the local rules.
+  configTzTime(TZ_INFO, NTP_SERVER);
+  Serial.printf("[time] NTP sync requested (%s, TZ %s)\n", NTP_SERVER, TZ_INFO);
+
   if (MDNS.begin(DEVICE_HOSTNAME)) {
     MDNS.addService("http", "tcp", WEB_SERVER_PORT);
     Serial.printf("[wifi] UI at http://%s.local/  or  http://%s/\n",
@@ -431,6 +469,8 @@ void renderDisplay() {
     d.relayAuto[i] = relays[i].mode == MODE_AUTO;
     d.remaining[i] = remainingSeconds(relays[i]);
   }
+  d.motionEnabled = motionEnabled();
+  d.motionActive = motionActive();
   displayRender(d);
 }
 #endif
@@ -462,6 +502,8 @@ void setup() {
                   r.onDuration / 1000, r.offDuration / 1000);
   }
 
+  motionBegin(); // PIR input (no-op when PIR_ENABLED is 0)
+
 #if OLED_ENABLED
   displaySplash("Relay", "connecting WiFi");
 #endif
@@ -488,6 +530,8 @@ void loop() {
 
   updateRelay(relays[0]);
   updateRelay(relays[1]);
+
+  motionUpdate(); // poll PIR + record edges (no-op when PIR_ENABLED is 0)
 
 #if OLED_ENABLED
   if (millis() - lastDisplay > 500) {  // refresh OLED ~2x/sec

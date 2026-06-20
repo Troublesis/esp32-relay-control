@@ -12,6 +12,8 @@ struct DisplayInfo {
   bool relayOn[2];
   bool relayAuto[2];
   unsigned long remaining[2]; // seconds to next auto switch (0 in manual)
+  bool motionEnabled;         // PIR sensor compiled in
+  bool motionActive;          // PIR currently detecting motion
   const char* version;
 };
 

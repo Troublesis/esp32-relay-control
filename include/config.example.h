@@ -42,7 +42,7 @@
 #define OTA_PASSWORD ""
 
 // Reported by /api/status and shown in the UI footer.
-#define FW_VERSION "1.1.0"
+#define FW_VERSION "1.2.0"
 
 // ----------------------------------------------------------------------------
 // Relay wiring (see WIRING GUIDE in main.cpp)
@@ -87,3 +87,49 @@
 #define OLED_ADDR    0x3C   // try 0x3D if your module doesn't light up
 #define OLED_WIDTH   128
 #define OLED_HEIGHT  64
+
+// ----------------------------------------------------------------------------
+// PIR motion sensor — e.g. HS-S38P (3 pins: VCC / GND / S)
+// ----------------------------------------------------------------------------
+//   PIR VCC -> ESP32 3V3
+//   PIR GND -> ESP32 GND
+//   PIR S   -> ESP32 GPIO 4  (PIR_PIN — any input-capable GPIO)
+// The signal pin goes HIGH while motion is present and returns LOW after the
+// sensor's own hold time. The WebUI shows the live state plus a timestamped
+// history log. Set PIR_ENABLED to 0 if no sensor is attached.
+#define PIR_ENABLED 1
+#define PIR_PIN     4
+// How often the input is sampled, in ms (PIR output changes slowly).
+#define PIR_POLL_MS 50
+// Maximum number of history events kept in RAM (oldest is dropped past this).
+#define PIR_LOG_MAX 999
+
+// ----------------------------------------------------------------------------
+// Bark notification — sent once each time the PIR sensor detects motion
+// ----------------------------------------------------------------------------
+// Leave disabled until your local config.h contains your Bark server details.
+#define BARK_ENABLED     0
+#define BARK_PUSH_URL    "https://your-bark-server.example/push"
+#define BARK_DEVICE_KEY  "YOUR_BARK_DEVICE_KEY"
+#define BARK_TITLE       "Human Motion Detected"
+#define BARK_BODY        "The ESP32 human sensor detected movement near the relay controller."
+#define BARK_BADGE       1
+#define BARK_SOUND       "door-close"
+#define BARK_ICON        ""
+#define BARK_GROUP       "esp32"
+#define BARK_OPEN_URL    "http://relay.local/"
+#define BARK_TIMEOUT_MS  3000
+
+// ----------------------------------------------------------------------------
+// NTP time — gives the motion log real timestamps (needs WiFi/internet)
+// ----------------------------------------------------------------------------
+// Without a sync the log falls back to showing the device uptime. TZ_INFO is a
+// POSIX timezone string and handles daylight-saving transitions automatically.
+// Default is Australia/Sydney (AEST/AEDT). Examples for other zones:
+//   Vietnam (UTC+7, no DST): "ICT-7"
+//   UK:                      "GMT0BST,M3.5.0/1,M10.5.0"
+//   US Eastern:              "EST5EDT,M3.2.0,M11.1.0"
+//   UTC:                     "UTC0"
+// Look up yours: https://github.com/nayarsystems/posix_tz_db
+#define NTP_SERVER "pool.ntp.org"
+#define TZ_INFO    "AEST-10AEDT,M10.1.0,M4.1.0/3"   // Australia/Sydney

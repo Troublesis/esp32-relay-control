@@ -44,6 +44,23 @@ static const char WEB_UI_HTML[] PROGMEM = R"HTML(
   footer { max-width:760px; margin:18px auto 0; font-size:.75rem; color:var(--muted); text-align:center; }
   .modepill { display:flex; gap:6px; }
   .modepill .btn { padding:8px; font-size:.85rem; }
+  .section { max-width:760px; margin:16px auto 0; }
+  .badge.motion { background:rgba(245,158,11,.18); color:#f59e0b; animation:pulse 1.2s ease-in-out infinite; }
+  .badge.clear  { background:rgba(148,163,184,.18); color:var(--muted); }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }
+  .mstats { display:flex; gap:18px; flex-wrap:wrap; font-size:.8rem; color:var(--muted); margin:6px 0 12px; }
+  .mstats b { color:#e2e8f0; font-weight:600; }
+  .loghead { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; }
+  .loghead .btn { flex:0 0 auto; padding:7px 12px; font-size:.8rem; background:#334155; }
+  .log { background:#0b1220; border:1px solid #334155; border-radius:10px; height:300px;
+         overflow-y:auto; padding:8px 10px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+         font-size:.78rem; line-height:1.55; }
+  .log .line { display:flex; gap:10px; white-space:nowrap; }
+  .log .lt { color:var(--muted); flex:0 0 auto; }
+  .log .lm { font-weight:600; }
+  .log .line.on  .lm { color:#f59e0b; }
+  .log .line.off .lm { color:var(--muted); font-weight:400; }
+  .log .empty { color:var(--muted); font-style:italic; }
 </style>
 </head>
 <body>
@@ -73,6 +90,23 @@ static const char WEB_UI_HTML[] PROGMEM = R"HTML(
         <a class="btn save" href="/update" style="display:block; text-align:center; text-decoration:none; line-height:1.2">Open updater</a>
         <div class="meta">Upload a new <code>firmware.bin</code> over the air.</div>
       </div>
+    </div>
+  </div>
+
+  <div class="section" id="motionSection" style="display:none">
+    <div class="card">
+      <h2>🚶 Motion Sensor
+        <span class="badge clear" id="motionBadge">—</span>
+      </h2>
+      <div class="mstats">
+        <span>Last trigger: <b id="motionLast">—</b></span>
+        <span>Detections: <b id="motionCount">0</b></span>
+      </div>
+      <div class="loghead">
+        <label style="margin:0">History log (newest at bottom, up to 999)</label>
+        <button class="btn" onclick="clearMotionLog()">Clear log</button>
+      </div>
+      <div class="log" id="motionLog"><div class="empty">Waiting for sensor events…</div></div>
     </div>
   </div>
 
@@ -167,6 +201,20 @@ function render(data) {
     if (editing !== `on-${r.id}`)  card.querySelector(`#on-${r.id}`).value  = r.onDuration;
     if (editing !== `off-${r.id}`) card.querySelector(`#off-${r.id}`).value = r.offDuration;
   });
+  updateMotion(data.motion);
+}
+
+function updateMotion(m) {
+  const section = document.getElementById('motionSection');
+  if (!m || !m.enabled) { if (section) section.style.display = 'none'; return; }
+  section.style.display = '';
+  const badge = document.getElementById('motionBadge');
+  badge.textContent = m.active ? 'MOTION' : 'CLEAR';
+  badge.className = 'badge ' + (m.active ? 'motion' : 'clear');
+  document.getElementById('motionCount').textContent = m.count;
+  document.getElementById('motionLast').textContent =
+    m.lastSeq === 0 ? 'none yet'
+                    : (m.lastTs || `+${Math.floor(m.lastUp/1000)}s uptime`);
 }
 
 document.addEventListener('focusin',  e => { if (e.target.tagName==='INPUT') editing = e.target.id; });
@@ -177,6 +225,55 @@ async function refresh() {
 }
 refresh();
 setInterval(refresh, 2000);
+
+// ---- Motion history log (incremental: only fetch events newer than we hold) ----
+let motionSeq = 0;        // highest event seq the page has rendered
+let motionPrimed = false; // false until the first batch arrives (forces scroll)
+
+function logLine(e) {
+  const div = document.createElement('div');
+  div.className = 'line ' + (e.m ? 'on' : 'off');
+  const ts = e.ts || `+${Math.floor(e.up/1000)}s uptime`;
+  const tt = document.createElement('span'); tt.className = 'lt'; tt.textContent = ts;
+  const mm = document.createElement('span'); mm.className = 'lm';
+  mm.textContent = e.m ? 'Motion detected' : 'No motion';
+  div.append(tt, mm);
+  return div;
+}
+
+async function refreshLog() {
+  let data;
+  try { data = await (await fetch(`/api/motion/log?since=${motionSeq}`)).json(); }
+  catch(e) { return; }
+  // Device rebooted or log was cleared elsewhere → its latest seq fell behind us.
+  if (data.latest < motionSeq) {
+    motionSeq = 0; motionPrimed = false;
+    document.getElementById('motionLog').innerHTML = '';
+    return refreshLog();
+  }
+  const events = data.events || [];
+  if (!events.length) return;
+  const box = document.getElementById('motionLog');
+  const empty = box.querySelector('.empty');
+  if (empty) empty.remove();
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  const frag = document.createDocumentFragment();
+  events.forEach(e => { if (e.seq > motionSeq) motionSeq = e.seq; frag.append(logLine(e)); });
+  box.append(frag);
+  while (box.children.length > 999) box.removeChild(box.firstChild); // hard cap
+  if (atBottom || !motionPrimed) box.scrollTop = box.scrollHeight;
+  motionPrimed = true;
+}
+
+async function clearMotionLog() {
+  try { await fetch('/api/motion/clear', { method:'POST' }); } catch(e) {}
+  motionSeq = 0; motionPrimed = false;
+  document.getElementById('motionLog').innerHTML =
+    '<div class="empty">Log cleared.</div>';
+}
+
+refreshLog();
+setInterval(refreshLog, 2000);
 </script>
 </body>
 </html>
