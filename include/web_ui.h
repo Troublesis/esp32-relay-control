@@ -28,26 +28,45 @@ static const char WEB_UI_HTML[] PROGMEM = R"HTML(
   .badge { font-size:.7rem; padding:2px 8px; border-radius:999px; font-weight:700; letter-spacing:.04em; }
   .badge.on { background:rgba(34,197,94,.18); color:var(--on); }
   .badge.off { background:rgba(239,68,68,.18); color:var(--off); }
-  .row { display:flex; gap:10px; margin:14px 0; align-items:center; }
-  .btn { flex:1; border:none; border-radius:10px; padding:12px; font-size:1rem; font-weight:600;
-         cursor:pointer; color:#fff; transition:transform .05s, opacity .15s; }
-  .btn:active { transform:scale(.97); }
-  .btn.on { background:var(--on); }
-  .btn.off { background:var(--off); }
-  .btn.ghost { background:#334155; }
-  .btn.ghost.active { background:var(--accent); }
+
+  /* Control row: a label on the left, its toggle/segmented control on the right. */
+  .ctl { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:14px 0; }
+  .ctl-label { font-size:.92rem; font-weight:600; color:#e2e8f0; }
+
+  /* iOS-style on/off slider switch — one tap flips state. */
+  .switch { position:relative; flex:0 0 auto; width:52px; height:30px; border-radius:999px;
+            background:#475569; border:none; padding:0; cursor:pointer; transition:background .2s; }
+  .switch.on { background:var(--on); }
+  .switch .knob { position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%;
+                  background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.45); transition:transform .2s; }
+  .switch.on .knob { transform:translateX(22px); }
+  .switch:active { filter:brightness(1.08); }
+
+  /* Segmented control — a single pill of mutually-exclusive options (e.g. Auto|Manual). */
+  .seg { display:flex; background:#0f172a; border:1px solid #334155; border-radius:10px; padding:3px; }
+  .ctl .seg { flex:0 0 auto; width:190px; }
+  .seg button { flex:1; border:none; background:transparent; color:var(--muted); padding:8px 6px;
+                border-radius:7px; font-size:.85rem; font-weight:600; cursor:pointer;
+                transition:background .15s, color .15s; }
+  .seg button.active { background:var(--accent); color:#fff; }
+
   label { font-size:.8rem; color:var(--muted); display:block; margin-bottom:4px; }
   .settings { margin-top:14px; border-top:1px solid #334155; padding-top:14px; }
-  .field { display:flex; gap:10px; align-items:flex-end; }
+  .field { display:flex; gap:10px; align-items:flex-end; transition:opacity .2s; }
   .field > div { flex:1; }
   input[type=number], input[type=text], input[type=password] { width:100%; padding:9px; border-radius:8px; border:1px solid #475569;
                        background:#0f172a; color:#e2e8f0; font-size:1rem; }
+  .btn { border:none; border-radius:10px; padding:12px; font-size:1rem; font-weight:600;
+         cursor:pointer; color:#fff; transition:transform .05s, opacity .15s; }
+  .btn:active { transform:scale(.97); }
   .save { width:100%; margin-top:12px; background:var(--accent); }
   .btn.mini { flex:0 0 auto; width:auto; padding:9px 16px; background:var(--accent); margin:0; }
+  /* Durations only matter in Auto mode — dim them + show a hint while Manual. */
+  .autohint { display:none; font-size:.72rem; color:#fbbf24; margin-bottom:8px; }
+  .settings.manual .autohint { display:block; }
+  .settings.manual .field { opacity:.45; }
   .meta { font-size:.75rem; color:var(--muted); margin-top:8px; min-height:1em; }
   footer { max-width:760px; margin:18px auto 0; font-size:.75rem; color:var(--muted); text-align:center; }
-  .modepill { display:flex; gap:6px; }
-  .modepill .btn { padding:8px; font-size:.85rem; }
   .section { max-width:760px; margin:16px auto 0; }
   .badge.motion { background:rgba(245,158,11,.18); color:#f59e0b; animation:pulse 1.2s ease-in-out infinite; }
   .badge.broken { background:rgba(239,68,68,.18); color:#f87171; animation:pulse 1.2s ease-in-out infinite; }
@@ -55,8 +74,11 @@ static const char WEB_UI_HTML[] PROGMEM = R"HTML(
   @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }
   .mstats { display:flex; gap:18px; flex-wrap:wrap; font-size:.8rem; color:var(--muted); margin:6px 0 4px; }
   .mstats b { color:#e2e8f0; font-weight:600; }
-  .toggles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:12px; }
-  .toggles .btn { padding:10px; font-size:.9rem; }
+  /* Per-source notification rows — dim the whole list while the master is off. */
+  .srclist { margin-top:6px; transition:opacity .2s; }
+  .srclist.dim { opacity:.4; }
+  .srclist .ctl { margin:10px 0; }
+  .srclist .ctl-label { font-weight:500; color:#cbd5e1; }
   .loghead { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:4px; }
   .loghead .btn { flex:0 0 auto; padding:7px 12px; font-size:.8rem; background:#334155; }
   .log { background:#0b1220; border:1px solid #334155; border-radius:10px; height:320px;
@@ -101,16 +123,19 @@ static const char WEB_UI_HTML[] PROGMEM = R"HTML(
   <div class="grid" id="devGrid">
     <div class="card" id="laserCard" style="display:none">
       <h2>🔆 Laser <span class="badge off" id="laserBadge">OFF</span></h2>
-      <div class="row">
-        <button class="btn on"  onclick="laserControl('on')">Turn ON</button>
-        <button class="btn off" onclick="laserControl('off')">Turn OFF</button>
+      <div class="ctl">
+        <span class="ctl-label">Power</span>
+        <button class="switch" id="laserPower" role="switch" aria-checked="false" onclick="laserControl('toggle')"><span class="knob"></span></button>
       </div>
-      <label>Mode</label>
-      <div class="modepill">
-        <button class="btn ghost" id="laserAuto"   onclick="laserMode('auto')">Auto (cycle)</button>
-        <button class="btn ghost" id="laserManual" onclick="laserMode('manual')">Manual (hold)</button>
+      <div class="ctl">
+        <span class="ctl-label">Mode</span>
+        <div class="seg" id="laserMode">
+          <button data-m="auto"   onclick="laserMode('auto')">Auto</button>
+          <button data-m="manual" onclick="laserMode('manual')">Manual</button>
+        </div>
       </div>
-      <div class="settings">
+      <div class="settings" id="laserSettings">
+        <div class="autohint">⏱ Durations apply in Auto mode</div>
         <div class="field">
           <div><label>ON duration (s)</label><input type="number" min="1" step="1" id="laserOn"></div>
           <div><label>OFF duration (s)</label><input type="number" min="1" step="1" id="laserOff"></div>
@@ -141,8 +166,11 @@ static const char WEB_UI_HTML[] PROGMEM = R"HTML(
           <div><input type="number" min="0" step="10" id="receiverDelay"></div>
           <button class="btn mini" onclick="saveReceiverDelay()">Save</button>
         </div>
-        <label style="margin-top:12px">Beam-present signal level — point the laser at the receiver; if it still shows BROKEN, flip this</label>
-        <button class="btn ghost" id="receiverBeam" data-high="1" onclick="toggleReceiverBeam()">Beam present = HIGH</button>
+        <label style="margin-top:14px">Beam present = — point the laser at the receiver; if it still shows BROKEN, flip this</label>
+        <div class="seg" id="receiverBeam">
+          <button data-high="1" onclick="setReceiverBeam(1)">HIGH</button>
+          <button data-high="0" onclick="setReceiverBeam(0)">LOW</button>
+        </div>
       </div>
     </div>
 
@@ -152,15 +180,16 @@ static const char WEB_UI_HTML[] PROGMEM = R"HTML(
   <div class="section">
     <div class="card" id="barkCard" style="display:none">
       <h2>🔔 Notifications <span class="badge off" id="barkMasterBadge">OFF</span></h2>
-      <div class="row">
-        <button class="btn ghost" id="bk_master" onclick="toggleBarkMaster()">Bark notifications: OFF</button>
+      <div class="ctl">
+        <span class="ctl-label">Bark notifications</span>
+        <button class="switch" id="bk_master" role="switch" aria-checked="false" onclick="toggleBarkMaster()"><span class="knob"></span></button>
       </div>
-      <div class="meta" style="margin-top:0">Per-source — tap each to toggle it independently (off by default).</div>
-      <div class="toggles">
-        <button class="btn ghost" id="bk_relay1" onclick="toggleBark('relay1')">Relay 1</button>
-        <button class="btn ghost" id="bk_relay2" onclick="toggleBark('relay2')">Relay 2</button>
-        <button class="btn ghost" id="bk_motion" onclick="toggleBark('motion')">Motion</button>
-        <button class="btn ghost" id="bk_laser"  onclick="toggleBark('laser')">Laser beam</button>
+      <div class="meta" style="margin:0">Per-source — toggle each independently (off by default).</div>
+      <div class="srclist" id="barkSources">
+        <div class="ctl"><span class="ctl-label">Relay 1</span><button class="switch" id="bk_relay1" role="switch" aria-checked="false" onclick="toggleBark('relay1')"><span class="knob"></span></button></div>
+        <div class="ctl"><span class="ctl-label">Relay 2</span><button class="switch" id="bk_relay2" role="switch" aria-checked="false" onclick="toggleBark('relay2')"><span class="knob"></span></button></div>
+        <div class="ctl"><span class="ctl-label">Motion</span><button class="switch" id="bk_motion" role="switch" aria-checked="false" onclick="toggleBark('motion')"><span class="knob"></span></button></div>
+        <div class="ctl"><span class="ctl-label">Laser beam</span><button class="switch" id="bk_laser" role="switch" aria-checked="false" onclick="toggleBark('laser')"><span class="knob"></span></button></div>
       </div>
       <div class="settings">
         <label>Bark server push URL</label>
@@ -206,22 +235,39 @@ async function api(path) {
   return res.json();
 }
 
+// Reflect a boolean on a slider switch (visual + a11y state in one place).
+function setSwitch(el, on) {
+  if (!el) return;
+  el.classList.toggle('on', !!on);
+  el.setAttribute('aria-checked', on ? 'true' : 'false');
+}
+
+// Highlight the active option of a segmented control by a data-attribute match.
+function setSeg(container, attr, value) {
+  if (!container) return;
+  container.querySelectorAll('button').forEach(b =>
+    b.classList.toggle('active', b.dataset[attr] === value));
+}
+
 // ---- relays ----
 const cardTpl = (r) => `
   <div class="card" data-id="${r.id}">
     <h2>Relay ${r.id}
       <span class="badge ${r.state}" data-badge>${r.state.toUpperCase()}</span>
     </h2>
-    <div class="row">
-      <button class="btn on"  onclick="control(${r.id},'on')">Turn ON</button>
-      <button class="btn off" onclick="control(${r.id},'off')">Turn OFF</button>
+    <div class="ctl">
+      <span class="ctl-label">Power</span>
+      <button class="switch" data-power role="switch" aria-checked="false" onclick="control(${r.id},'toggle')"><span class="knob"></span></button>
     </div>
-    <label>Mode</label>
-    <div class="modepill">
-      <button class="btn ghost ${r.mode==='auto'?'active':''}"   onclick="setMode(${r.id},'auto')">Auto (cycle)</button>
-      <button class="btn ghost ${r.mode==='manual'?'active':''}" onclick="setMode(${r.id},'manual')">Manual (hold)</button>
+    <div class="ctl">
+      <span class="ctl-label">Mode</span>
+      <div class="seg" data-mode>
+        <button data-m="auto"   onclick="setMode(${r.id},'auto')">Auto</button>
+        <button data-m="manual" onclick="setMode(${r.id},'manual')">Manual</button>
+      </div>
     </div>
-    <div class="settings">
+    <div class="settings" data-settings>
+      <div class="autohint">⏱ Durations apply in Auto mode</div>
       <div class="field">
         <div><label>ON duration (s)</label><input type="number" min="1" step="1" id="on-${r.id}" value="${r.onDuration}"></div>
         <div><label>OFF duration (s)</label><input type="number" min="1" step="1" id="off-${r.id}" value="${r.offDuration}"></div>
@@ -245,13 +291,15 @@ function updateRelays(relays) {
   relays.forEach(r => {
     const card = grid.querySelector(`.card[data-id="${r.id}"]`);
     if (!card) return;
+    const on = r.state === 'on', auto = r.mode === 'auto';
     const badge = card.querySelector('[data-badge]');
     badge.textContent = r.state.toUpperCase();
     badge.className = `badge ${r.state}`;
+    setSwitch(card.querySelector('[data-power]'), on);
+    setSeg(card.querySelector('[data-mode]'), 'm', r.mode);
+    card.querySelector('[data-settings]').classList.toggle('manual', !auto);
     card.querySelector('[data-meta]').textContent =
-      r.mode==='auto' ? `Next switch in ${r.remaining}s` : `Holding ${r.state}`;
-    card.querySelectorAll('.modepill .btn').forEach((b,i) =>
-      b.classList.toggle('active', (i===0) === (r.mode==='auto')));
+      auto ? `Next switch in ${r.remaining}s` : `Holding ${r.state}`;
     if (editing !== `on-${r.id}`)  card.querySelector(`#on-${r.id}`).value  = r.onDuration;
     if (editing !== `off-${r.id}`) card.querySelector(`#off-${r.id}`).value = r.offDuration;
   });
@@ -270,35 +318,30 @@ function updateLaser(l) {
   const card = document.getElementById('laserCard');
   if (!l || !l.enabled) { if (card) card.style.display = 'none'; return; }
   card.style.display = '';
+  const on = l.state === 'on', auto = l.mode === 'auto';
   const badge = document.getElementById('laserBadge');
   badge.textContent = l.state.toUpperCase();
   badge.className = `badge ${l.state}`;
-  document.getElementById('laserAuto').classList.toggle('active', l.mode==='auto');
-  document.getElementById('laserManual').classList.toggle('active', l.mode==='manual');
+  setSwitch(document.getElementById('laserPower'), on);
+  setSeg(document.getElementById('laserMode'), 'm', l.mode);
+  document.getElementById('laserSettings').classList.toggle('manual', !auto);
   if (editing !== 'laserOn')  document.getElementById('laserOn').value  = l.onDuration;
   if (editing !== 'laserOff') document.getElementById('laserOff').value = l.offDuration;
   document.getElementById('laserMeta').textContent =
-    l.mode==='auto' ? `Next switch in ${l.remaining}s` : `Holding ${l.state}`;
+    auto ? `Next switch in ${l.remaining}s` : `Holding ${l.state}`;
 }
 
 // ---- motion / beam sensors (same status shape) ----
 async function saveMotionDelay()   { render(await api(`/api/motion/delay?ms=${document.getElementById('motionDelay').value||0}`)); }
 async function saveReceiverDelay() { render(await api(`/api/receiver/delay?ms=${document.getElementById('receiverDelay').value||0}`)); }
 
-// Flip the beam-present signal level (fixes an inverted receiver module live).
-async function toggleReceiverBeam() {
-  const b = document.getElementById('receiverBeam');
-  const next = b.dataset.high === '1' ? 0 : 1;
-  render(await api(`/api/receiver/config?beamHigh=${next}`));
-}
+// Set the beam-present signal level (fixes an inverted receiver module live).
+async function setReceiverBeam(high) { render(await api(`/api/receiver/config?beamHigh=${high}`)); }
 
-// Reflect the persisted beam polarity on the toggle button.
+// Reflect the persisted beam polarity on the segmented control.
 function updateReceiverBeam(r) {
-  const b = document.getElementById('receiverBeam');
-  if (!b || !r || typeof r.beamHigh === 'undefined') return;
-  b.dataset.high = r.beamHigh ? '1' : '0';
-  b.textContent = 'Beam present = ' + (r.beamHigh ? 'HIGH' : 'LOW');
-  b.classList.toggle('active', !!r.beamHigh);
+  if (!r || typeof r.beamHigh === 'undefined') return;
+  setSeg(document.getElementById('receiverBeam'), 'high', r.beamHigh ? '1' : '0');
 }
 
 function updateSensor(prefix, s, onLabel, offLabel, onCls) {
@@ -319,13 +362,13 @@ function updateSensor(prefix, s, onLabel, offLabel, onCls) {
 // ---- bark notifications (master switch + server config + 4 per-source toggles) ----
 async function toggleBark(src) {
   const b = document.getElementById('bk_' + src);
-  const next = b.classList.contains('active') ? 0 : 1;
+  const next = b.classList.contains('on') ? 0 : 1;
   render(await api(`/api/bark?source=${src}&enabled=${next}`));
 }
 
 async function toggleBarkMaster() {
   const b = document.getElementById('bk_master');
-  const next = b.classList.contains('active') ? 0 : 1;
+  const next = b.classList.contains('on') ? 0 : 1;
   render(await api(`/api/bark/config?master=${next}`));
 }
 
@@ -345,17 +388,15 @@ function updateBark(b) {
   const card = document.getElementById('barkCard');
   if (!b || !b.available) { if (card) card.style.display = 'none'; return; }
   card.style.display = '';
-  // Master kill switch (button label + header badge).
-  const master = document.getElementById('bk_master');
-  master.classList.toggle('active', !!b.master);
-  master.textContent = 'Bark notifications: ' + (b.master ? 'ON' : 'OFF');
+  // Master kill switch (slider + header badge); dim the source list when off.
+  setSwitch(document.getElementById('bk_master'), b.master);
   const mb = document.getElementById('barkMasterBadge');
   mb.textContent = b.master ? 'ON' : 'OFF';
   mb.className = 'badge ' + (b.master ? 'on' : 'off');
+  document.getElementById('barkSources').classList.toggle('dim', !b.master);
   // Each per-source toggle reflects its own persisted state.
-  [['relay1',b.relay1],['relay2',b.relay2],['motion',b.motion],['laser',b.laser]].forEach(([k,v]) => {
-    document.getElementById('bk_' + k).classList.toggle('active', !!v);
-  });
+  [['relay1',b.relay1],['relay2',b.relay2],['motion',b.motion],['laser',b.laser]].forEach(([k,v]) =>
+    setSwitch(document.getElementById('bk_' + k), v));
   // Server endpoint (prefill URL; key field stays blank — secret is never sent back).
   const u = document.getElementById('barkUrl');
   if (u && editing !== 'barkUrl' && typeof b.url === 'string') u.value = b.url;
