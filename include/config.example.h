@@ -180,7 +180,7 @@
 // Per-source titles + first-boot enable defaults (1 = notify, 0 = silent).
 #define BARK_MOTION_TITLE   "Human Motion Detected"
 #define BARK_MOTION_BODY    "The ESP32 PIR sensor detected movement."
-#define BARK_MOTION_DEFAULT 1
+#define BARK_MOTION_DEFAULT 0
 
 #define BARK_BEAM_TITLE     "Laser Beam Broken"
 #define BARK_BEAM_BODY      "The ESP32 laser tripwire was interrupted."

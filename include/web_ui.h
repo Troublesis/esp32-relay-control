@@ -55,7 +55,7 @@ static const char WEB_UI_HTML[] PROGMEM = R"HTML(
   @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }
   .mstats { display:flex; gap:18px; flex-wrap:wrap; font-size:.8rem; color:var(--muted); margin:6px 0 4px; }
   .mstats b { color:#e2e8f0; font-weight:600; }
-  .toggles { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+  .toggles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:12px; }
   .toggles .btn { padding:10px; font-size:.9rem; }
   .loghead { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:4px; }
   .loghead .btn { flex:0 0 auto; padding:7px 12px; font-size:.8rem; background:#334155; }
@@ -132,14 +132,29 @@ static const char WEB_UI_HTML[] PROGMEM = R"HTML(
       </div>
     </div>
 
+  </div>
+
+  <!-- Bark notification toggles — sit directly on top of the General Info log -->
+  <div class="section">
     <div class="card" id="barkCard" style="display:none">
-      <h2>🔔 Notifications</h2>
-      <div class="meta" style="margin-top:0">Tap a source to toggle its Bark push.</div>
+      <h2>🔔 Notifications <span class="badge off" id="barkMasterBadge">OFF</span></h2>
+      <div class="row">
+        <button class="btn ghost" id="bk_master" onclick="toggleBarkMaster()">Bark notifications: OFF</button>
+      </div>
+      <div class="meta" style="margin-top:0">Per-source — tap each to toggle it independently (off by default).</div>
       <div class="toggles">
         <button class="btn ghost" id="bk_relay1" onclick="toggleBark('relay1')">Relay 1</button>
         <button class="btn ghost" id="bk_relay2" onclick="toggleBark('relay2')">Relay 2</button>
         <button class="btn ghost" id="bk_motion" onclick="toggleBark('motion')">Motion</button>
         <button class="btn ghost" id="bk_laser"  onclick="toggleBark('laser')">Laser beam</button>
+      </div>
+      <div class="settings">
+        <label>Bark server push URL</label>
+        <input type="text" id="barkUrl" placeholder="https://api.day.app/push" autocomplete="off">
+        <label style="margin-top:10px">Device key</label>
+        <input type="password" id="barkKey" placeholder="leave blank to keep current" autocomplete="off">
+        <button class="btn save" onclick="saveBarkConfig()">Save server settings</button>
+        <div class="meta" id="barkMsg"></div>
       </div>
     </div>
   </div>
@@ -283,21 +298,52 @@ function updateSensor(prefix, s, onLabel, offLabel, onCls) {
   if (di && editing !== prefix + 'Delay') di.value = s.delay;
 }
 
-// ---- bark notifications (4 per-source toggles) ----
+// ---- bark notifications (master switch + server config + 4 per-source toggles) ----
 async function toggleBark(src) {
   const b = document.getElementById('bk_' + src);
   const next = b.classList.contains('active') ? 0 : 1;
   render(await api(`/api/bark?source=${src}&enabled=${next}`));
 }
 
+async function toggleBarkMaster() {
+  const b = document.getElementById('bk_master');
+  const next = b.classList.contains('active') ? 0 : 1;
+  render(await api(`/api/bark/config?master=${next}`));
+}
+
+async function saveBarkConfig() {
+  const url = document.getElementById('barkUrl').value.trim();
+  const key = document.getElementById('barkKey').value;
+  const msg = document.getElementById('barkMsg');
+  if (!url) { msg.textContent = 'Enter a push URL'; return; }
+  const qs = new URLSearchParams({ url });
+  if (key) qs.set('key', key);
+  render(await api(`/api/bark/config?${qs.toString()}`));
+  document.getElementById('barkKey').value = '';
+  msg.textContent = 'Saved.';
+}
+
 function updateBark(b) {
   const card = document.getElementById('barkCard');
   if (!b || !b.available) { if (card) card.style.display = 'none'; return; }
   card.style.display = '';
+  // Master kill switch (button label + header badge).
+  const master = document.getElementById('bk_master');
+  master.classList.toggle('active', !!b.master);
+  master.textContent = 'Bark notifications: ' + (b.master ? 'ON' : 'OFF');
+  const mb = document.getElementById('barkMasterBadge');
+  mb.textContent = b.master ? 'ON' : 'OFF';
+  mb.className = 'badge ' + (b.master ? 'on' : 'off');
+  // Each per-source toggle reflects its own persisted state.
   [['relay1',b.relay1],['relay2',b.relay2],['motion',b.motion],['laser',b.laser]].forEach(([k,v]) => {
-    const btn = document.getElementById('bk_' + k);
-    btn.classList.toggle('active', !!v);
+    document.getElementById('bk_' + k).classList.toggle('active', !!v);
   });
+  // Server endpoint (prefill URL; key field stays blank — secret is never sent back).
+  const u = document.getElementById('barkUrl');
+  if (u && editing !== 'barkUrl' && typeof b.url === 'string') u.value = b.url;
+  const k = document.getElementById('barkKey');
+  if (k && editing !== 'barkKey')
+    k.placeholder = b.keySet ? 'leave blank to keep current' : 'no key set — required';
 }
 
 async function saveWifi() {

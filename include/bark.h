@@ -32,12 +32,28 @@ bool barkEnabled(int source);
 // Flip a source toggle and persist it. No-op when unavailable / out of range.
 void barkSetEnabled(Preferences& prefs, int source, bool on);
 
-// Restore the persisted toggles, seeded from the BARK_*_DEFAULT build values.
+// Restore the persisted toggles + server config, seeded from the BARK_* build
+// values (per-source defaults, BARK_PUSH_URL, BARK_DEVICE_KEY).
 void barkBegin(Preferences& prefs);
+
+// Master on/off — a single kill switch over every source (persisted). When off,
+// barkSend() is a no-op regardless of the per-source toggles.
+bool barkMasterEnabled();
+void barkSetMaster(Preferences& prefs, bool on);
+
+// Live push endpoint + credentials (persisted; fall back to the build defaults).
+String barkPushUrl();
+String barkDeviceKey();
+
+// Update + persist the push URL and device key. An empty `key` keeps the current
+// one (so the UI never has to echo the secret back). No-op when unavailable.
+void barkSetConfig(Preferences& prefs, const String& url, const String& key);
 
 // Send a push for `source` — only if available AND that source is enabled. The
 // module appends device name, timestamp and the live LAN URL to `body`.
 void barkSend(int source, const String& title, const String& body);
 
-// {"available":bool,"relay1":bool,"relay2":bool,"motion":bool,"laser":bool}
+// {"available":bool,"master":bool,"url":"..","keySet":bool,
+//  "relay1":bool,"relay2":bool,"motion":bool,"laser":bool}
+// The device key itself is never returned — only whether one is set.
 String barkStatusJson();

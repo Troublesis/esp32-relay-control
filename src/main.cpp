@@ -460,6 +460,25 @@ void handleBark() {
   sendStatus();
 }
 
+// POST/GET /api/bark/config?master=0|1&url=..&key=.. -> manage the global on/off
+// switch and the Bark server endpoint/credentials. Each arg is independent: a
+// blank/absent key keeps the current one (so the secret is never echoed back).
+void handleBarkConfig() {
+  if (!barkAvailable())
+    return sendError(400, "bark notifications not available in this build");
+  if (server.hasArg("master")) {
+    String v = server.arg("master");
+    barkSetMaster(prefs, (v == "1" || v == "true" || v == "on"));
+  }
+  if (server.hasArg("url") || server.hasArg("key")) {
+    String url = server.hasArg("url") ? server.arg("url") : barkPushUrl();
+    String key = server.hasArg("key") ? server.arg("key") : String("");
+    if (url.length() == 0) return sendError(400, "url must not be empty");
+    barkSetConfig(prefs, url, key);
+  }
+  sendStatus();
+}
+
 // ----------------------------------------------------------------------------
 // HTTP route handlers — OTA (browser firmware upload)
 // ----------------------------------------------------------------------------
@@ -540,6 +559,7 @@ void setupRoutes() {
   onGetPost("/api/motion/delay", handleMotionDelay);
   onGetPost("/api/receiver/delay", handleReceiverDelay);
   onGetPost("/api/bark", handleBark);
+  onGetPost("/api/bark/config", handleBarkConfig);
 
   server.on("/update", HTTP_GET, handleUpdatePage);
   server.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);

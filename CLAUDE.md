@@ -36,7 +36,7 @@ Headers in `include/`, logic in `src/`. All user-tunable config lives in `config
 - **`include/display.h` + `src/display.cpp`** — OLED module, decoupled via a `DisplayInfo` snapshot struct (no direct access to relay/WiFi globals).
 - **`include/timeutil.h`** — header-only `syncedEpoch()` / `formatEpoch()` NTP-time helpers shared by the log and Bark.
 - **`include/eventlog.h` + `src/eventlog.cpp`** — unified "General Info" ring buffer (`logEvent`/`logJson`/`logClear`). Every subsystem writes here; the WebUI fetches it incrementally by seq.
-- **`include/bark.h` + `src/bark.cpp`** — one Bark push client with **four independent persisted toggles** (`BARK_SRC_RELAY1/RELAY2/MOTION/LASER`). Callers pass title+body; the module appends device/time/URL.
+- **`include/bark.h` + `src/bark.cpp`** — one Bark push client with **four independent persisted toggles** (`BARK_SRC_RELAY1/RELAY2/MOTION/LASER`), a **master on/off kill switch** over all sources, and a **runtime-editable push URL + device key** (persisted, override the `config.h` defaults; the key is never echoed back over the API). Callers pass title+body; the module appends device/time/URL.
 - **`include/sensor.h` + `src/sensor.cpp`** — generic debounced digital-input `Sensor` (poll → debounce → detection-delay cooldown → `logEvent` + `barkSend`). The single home for edge/debounce logic.
 - **`include/motion.h` + `src/motion.cpp`** — PIR sensor: a thin named wrapper configuring one `Sensor` (alert = motion HIGH, `LOG_MOTION`, `BARK_SRC_MOTION`).
 - **`include/receiver.h` + `src/receiver.cpp`** — laser-beam receiver: a thin named wrapper configuring one `Sensor` (alert = beam broken, `LOG_BEAM`, `BARK_SRC_LASER`).
@@ -49,7 +49,7 @@ A `Relay[2]` array drives the relays, and the **laser emitter reuses the exact s
 - **`MODE_AUTO`** — `updateRelay()` (every `loop()`) flips the output when `millis() - lastToggle` exceeds the current window.
 - **`MODE_MANUAL`** — holds state; `updateRelay()` is a no-op. Any control command forces MANUAL so it isn't overridden by the cycle.
 
-`setRelay()` is the single choke point that writes the pin + resets the AUTO window — it does **not** log/notify (so auto-cycle ticks don't flood). The control handlers log + Bark only deliberate (manual) switches. Settings persist via `Preferences` (NVS namespace `"relay"`, keys prefixed per output e.g. `r1_on`, `laser_mode`); sensor delays under `pir_delay`/`rx_delay`; Bark toggles under `bark_r1`/`bark_r2`/`bark_mo`/`bark_la`. WiFi credentials live in the same namespace (`wifi_ssid`, `wifi_pass`) and **override** the `config.h` defaults when present (`wifiSsid()`/`wifiPass()`).
+`setRelay()` is the single choke point that writes the pin + resets the AUTO window — it does **not** log/notify (so auto-cycle ticks don't flood). The control handlers log + Bark only deliberate (manual) switches. Settings persist via `Preferences` (NVS namespace `"relay"`, keys prefixed per output e.g. `r1_on`, `laser_mode`); sensor delays under `pir_delay`/`rx_delay`; Bark toggles under `bark_r1`/`bark_r2`/`bark_mo`/`bark_la`, plus the master switch (`bark_on`) and editable server config (`bark_url`/`bark_key`). WiFi credentials live in the same namespace (`wifi_ssid`, `wifi_pass`) and **override** the `config.h` defaults when present (`wifiSsid()`/`wifiPass()`).
 
 ### Sensor + event-log model
 
@@ -63,7 +63,7 @@ A `Relay[2]` array drives the relays, and the **laser emitter reuses the exact s
 
 Synchronous `WebServer`. Status JSON is hand-built in `statusJson()`/`relayJson()`/`laserJson()` + the modules' `*StatusJson()` (no ArduinoJson). **Durations are seconds over the wire, ms internally.** The `onGetPost()` helper registers each route for both GET and POST so any webhook source works. Browser OTA uses the streaming upload pattern: `server.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload)` where the upload hook feeds `Update.write()`. `requireAuth()` gates OTA with HTTP Basic auth (user `admin`) when `OTA_PASSWORD` is set.
 
-Routes (each GET+POST): `/api/status`, `/api/control?relay=1|2&action=`, `/api/settings?relay=`, `/webhook` (alias of control), `/api/laser/control?action=`, `/api/laser/settings`, `/api/log[?since=N]`, `/api/log/clear`, `/api/motion/delay?ms=`, `/api/receiver/delay?ms=`, `/api/bark?source=relay1|relay2|motion|laser&enabled=0|1`, plus the WiFi + `/update` routes.
+Routes (each GET+POST): `/api/status`, `/api/control?relay=1|2&action=`, `/api/settings?relay=`, `/webhook` (alias of control), `/api/laser/control?action=`, `/api/laser/settings`, `/api/log[?since=N]`, `/api/log/clear`, `/api/motion/delay?ms=`, `/api/receiver/delay?ms=`, `/api/bark?source=relay1|relay2|motion|laser&enabled=0|1`, `/api/bark/config?master=0|1&url=&key=` (blank key keeps current), plus the WiFi + `/update` routes.
 
 ### OLED
 

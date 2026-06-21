@@ -20,6 +20,12 @@ static bool enabledFlags[BARK_SRC_COUNT] = {
   BARK_RELAY1_DEFAULT, BARK_RELAY2_DEFAULT, BARK_MOTION_DEFAULT, BARK_BEAM_DEFAULT
 };
 
+// Master kill switch + server config, seeded from the build values and then
+// overlaid from flash by barkBegin(). All editable live from the WebUI.
+static bool   masterOn  = true;
+static String pushUrl   = BARK_PUSH_URL;
+static String deviceKey = BARK_DEVICE_KEY;
+
 // Short, stable NVS keys (the Preferences namespace caps key length at 15).
 static const char* nvsKeyFor(int s) {
   switch (s) {
@@ -77,7 +83,7 @@ static String buildBody(const String& body) {
 
 static String buildPayload(const String& title, const String& body) {
   String json = "{\"device_key\":\"";
-  json += jsonEscape(BARK_DEVICE_KEY);
+  json += jsonEscape(deviceKey.c_str());
   json += "\"";
   appendJsonString(json, "title", title.c_str());
   String b = buildBody(body);
@@ -108,11 +114,37 @@ void barkSetEnabled(Preferences& prefs, int s, bool on) {
 void barkBegin(Preferences& prefs) {
   for (int s = 0; s < BARK_SRC_COUNT; s++)
     enabledFlags[s] = prefs.getBool(nvsKeyFor(s), enabledFlags[s]);
+  masterOn  = prefs.getBool("bark_on", masterOn);
+  pushUrl   = prefs.getString("bark_url", pushUrl);
+  deviceKey = prefs.getString("bark_key", deviceKey);
+}
+
+bool barkMasterEnabled() { return masterOn; }
+
+void barkSetMaster(Preferences& prefs, bool on) {
+  masterOn = on;
+  prefs.putBool("bark_on", on);
+  Serial.printf("[bark] master switch %s\n", on ? "ON" : "OFF");
+}
+
+String barkPushUrl()   { return pushUrl; }
+String barkDeviceKey() { return deviceKey; }
+
+void barkSetConfig(Preferences& prefs, const String& url, const String& key) {
+  pushUrl = url;
+  prefs.putString("bark_url", url);
+  if (key.length() > 0) {           // empty = keep the current key (never echoed)
+    deviceKey = key;
+    prefs.putString("bark_key", key);
+  }
+  Serial.printf("[bark] server config updated (url set, key %s)\n",
+                key.length() ? "changed" : "unchanged");
 }
 
 void barkSend(int s, const String& title, const String& body) {
+  if (!masterOn) return;       // global kill switch overrides every source
   if (!barkEnabled(s)) return; // unavailable, out of range, or this source is off
-  if (BARK_PUSH_URL[0] == '\0' || BARK_DEVICE_KEY[0] == '\0') {
+  if (pushUrl.length() == 0 || deviceKey.length() == 0) {
     Serial.println("[bark] skipped: missing URL or device key");
     return;
   }
@@ -127,7 +159,7 @@ void barkSend(int s, const String& title, const String& body) {
   HTTPClient http;
   http.setConnectTimeout(BARK_TIMEOUT_MS);
   http.setTimeout(BARK_TIMEOUT_MS);
-  if (!http.begin(client, BARK_PUSH_URL)) {
+  if (!http.begin(client, pushUrl)) {
     Serial.println("[bark] failed to start HTTP request");
     return;
   }
@@ -142,6 +174,9 @@ void barkSend(int s, const String& title, const String& body) {
 
 String barkStatusJson() {
   String s = "{\"available\":true";
+  s += ",\"master\":" + String(masterOn ? "true" : "false");
+  s += ",\"url\":\"" + jsonEscape(pushUrl.c_str()) + "\"";
+  s += ",\"keySet\":" + String(deviceKey.length() ? "true" : "false");
   s += ",\"relay1\":" + String(enabledFlags[BARK_SRC_RELAY1] ? "true" : "false");
   s += ",\"relay2\":" + String(enabledFlags[BARK_SRC_RELAY2] ? "true" : "false");
   s += ",\"motion\":" + String(enabledFlags[BARK_SRC_MOTION] ? "true" : "false");
@@ -158,5 +193,10 @@ void   barkSetEnabled(Preferences&, int, bool) {}
 void   barkBegin(Preferences&) {}
 void   barkSend(int, const String&, const String&) {}
 String barkStatusJson() { return String("{\"available\":false}"); }
+bool   barkMasterEnabled() { return false; }
+void   barkSetMaster(Preferences&, bool) {}
+String barkPushUrl() { return String(BARK_PUSH_URL); }
+String barkDeviceKey() { return String(BARK_DEVICE_KEY); }
+void   barkSetConfig(Preferences&, const String&, const String&) {}
 
 #endif
