@@ -39,7 +39,7 @@ Headers in `include/`, logic in `src/`. All user-tunable config lives in `config
 - **`include/bark.h` + `src/bark.cpp`** — one Bark push client with **four independent persisted toggles** (`BARK_SRC_RELAY1/RELAY2/MOTION/LASER`), a **master on/off kill switch** over all sources, and a **runtime-editable push URL + device key** (persisted, override the `config.h` defaults; the key is never echoed back over the API). Callers pass title+body; the module appends device/time/URL.
 - **`include/sensor.h` + `src/sensor.cpp`** — generic debounced digital-input `Sensor` (poll → debounce → detection-delay cooldown → `logEvent` + `barkSend`). The single home for edge/debounce logic.
 - **`include/motion.h` + `src/motion.cpp`** — PIR sensor: a thin named wrapper configuring one `Sensor` (alert = motion HIGH, `LOG_MOTION`, `BARK_SRC_MOTION`).
-- **`include/receiver.h` + `src/receiver.cpp`** — laser-beam receiver: a thin named wrapper configuring one `Sensor` (alert = beam broken, `LOG_BEAM`, `BARK_SRC_LASER`).
+- **`include/receiver.h` + `src/receiver.cpp`** — laser-beam receiver: a thin named wrapper configuring one `Sensor` (alert = beam broken, `LOG_BEAM`, `BARK_SRC_LASER`). The beam-present signal level is **runtime-invertible** (`receiverSetBeamHigh()`, persisted as `rx_beam`): flipping it swaps both the alert polarity and the input pull (PULLDOWN↔PULLUP) live via `sensorSetInput()`, so an inverted/open-collector module can be corrected from the WebUI without a reflash.
 - **`src/main.cpp`** — relays + laser, web server/routing, WiFi+AP, OTA, persistence; snapshots state into the OLED + status JSON.
 
 ### Relay model (the core abstraction)
@@ -49,7 +49,7 @@ A `Relay[2]` array drives the relays, and the **laser emitter reuses the exact s
 - **`MODE_AUTO`** — `updateRelay()` (every `loop()`) flips the output when `millis() - lastToggle` exceeds the current window.
 - **`MODE_MANUAL`** — holds state; `updateRelay()` is a no-op. Any control command forces MANUAL so it isn't overridden by the cycle.
 
-`setRelay()` is the single choke point that writes the pin + resets the AUTO window — it does **not** log/notify (so auto-cycle ticks don't flood). The control handlers log + Bark only deliberate (manual) switches. Settings persist via `Preferences` (NVS namespace `"relay"`, keys prefixed per output e.g. `r1_on`, `laser_mode`); sensor delays under `pir_delay`/`rx_delay`; Bark toggles under `bark_r1`/`bark_r2`/`bark_mo`/`bark_la`, plus the master switch (`bark_on`) and editable server config (`bark_url`/`bark_key`). WiFi credentials live in the same namespace (`wifi_ssid`, `wifi_pass`) and **override** the `config.h` defaults when present (`wifiSsid()`/`wifiPass()`).
+`setRelay()` is the single choke point that writes the pin + resets the AUTO window — it does **not** log/notify (so auto-cycle ticks don't flood). The control handlers log + Bark only deliberate (manual) switches. Settings persist via `Preferences` (NVS namespace `"relay"`, keys prefixed per output e.g. `r1_on`, `laser_mode`); sensor delays under `pir_delay`/`rx_delay`, receiver beam polarity under `rx_beam`; Bark toggles under `bark_r1`/`bark_r2`/`bark_mo`/`bark_la`, plus the master switch (`bark_on`) and editable server config (`bark_url`/`bark_key`). WiFi credentials live in the same namespace (`wifi_ssid`, `wifi_pass`) and **override** the `config.h` defaults when present (`wifiSsid()`/`wifiPass()`).
 
 ### Sensor + event-log model
 
@@ -63,7 +63,7 @@ A `Relay[2]` array drives the relays, and the **laser emitter reuses the exact s
 
 Synchronous `WebServer`. Status JSON is hand-built in `statusJson()`/`relayJson()`/`laserJson()` + the modules' `*StatusJson()` (no ArduinoJson). **Durations are seconds over the wire, ms internally.** The `onGetPost()` helper registers each route for both GET and POST so any webhook source works. Browser OTA uses the streaming upload pattern: `server.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload)` where the upload hook feeds `Update.write()`. `requireAuth()` gates OTA with HTTP Basic auth (user `admin`) when `OTA_PASSWORD` is set.
 
-Routes (each GET+POST): `/api/status`, `/api/control?relay=1|2&action=`, `/api/settings?relay=`, `/webhook` (alias of control), `/api/laser/control?action=`, `/api/laser/settings`, `/api/log[?since=N]`, `/api/log/clear`, `/api/motion/delay?ms=`, `/api/receiver/delay?ms=`, `/api/bark?source=relay1|relay2|motion|laser&enabled=0|1`, `/api/bark/config?master=0|1&url=&key=` (blank key keeps current), plus the WiFi + `/update` routes.
+Routes (each GET+POST): `/api/status`, `/api/control?relay=1|2&action=`, `/api/settings?relay=`, `/webhook` (alias of control), `/api/laser/control?action=`, `/api/laser/settings`, `/api/log[?since=N]`, `/api/log/clear`, `/api/motion/delay?ms=`, `/api/receiver/delay?ms=`, `/api/receiver/config?beamHigh=0|1`, `/api/bark?source=relay1|relay2|motion|laser&enabled=0|1`, `/api/bark/config?master=0|1&url=&key=` (blank key keeps current), plus the WiFi + `/update` routes.
 
 ### OLED
 
@@ -73,7 +73,7 @@ Routes (each GET+POST): `/api/status`, `/api/control?relay=1|2&action=`, `/api/s
 
 - Relays are `1`/`2` in the API but indexed `0`/`1` internally (`relayIndexArg()` validates). The laser is a singleton at `/api/laser/*`.
 - Default pins: relays 26/27, laser 25, PIR 4, receiver 33, I2C SDA=21 (the committed example uses 21; the HUZZAH32 board in `config.h` uses 23) / SCL=22; OLED address `0x3C` (some panels `0x3D`).
-- Laser + receiver are each 3-pin (VCC/GND/Signal). Laser is active-HIGH; the receiver's beam-present level is `RECEIVER_BEAM_HIGH` (alert = beam broken). The receiver's input pull is chosen so a *disconnected* sensor fails to "beam broken".
+- Laser + receiver are each 3-pin (VCC/GND/Signal). Laser is active-HIGH; the receiver's beam-present level defaults to `RECEIVER_BEAM_HIGH` but is **flippable live** from the WebUI (persisted `rx_beam`) — alert = beam broken. The receiver's input pull is chosen so a *disconnected* sensor fails to "beam broken". If pointing the laser at the receiver shows BROKEN, the module is inverted: flip the card's "Beam present = HIGH/LOW" toggle (no reflash). The card's "Signal: HIGH/LOW (GPIO 33)" readout shows the live raw pin level for wiring checks.
 - "Detection delay" (motion + receiver) is a per-sensor cooldown (ms) between logged alerts; default 0 (most responsive), editable live and persisted.
 - Bark has 4 independent toggles. The "laser" toggle fires on **beam break** (receiver), not on emitter on/off. Auto-cycle relay/laser ticks never log or notify — only manual switches do.
 - IDE clang flags `Arduino.h not found` / undeclared ESP32 macros / `String` unknown — these are not real errors; only a `pio run` build is authoritative.

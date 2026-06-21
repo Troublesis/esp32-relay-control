@@ -82,6 +82,18 @@ static const char WEB_UI_HTML[] PROGMEM = R"HTML(
     <div class="wifi" id="wifi">connecting…</div>
   </header>
 
+  <!-- Unified "General Info" event log — pinned to the top for quick checking -->
+  <div class="section" style="margin-top:0">
+    <div class="card">
+      <div class="loghead">
+        <h2 style="margin:0">📋 General Info</h2>
+        <button class="btn" onclick="clearLog()">Clear log</button>
+      </div>
+      <div class="meta" style="margin:0 0 8px">Relay, laser, motion &amp; beam events — newest first.</div>
+      <div class="log" id="log"><div class="empty">Waiting for events…</div></div>
+    </div>
+  </div>
+
   <!-- Relays (built dynamically from /api/status) -->
   <div class="grid" id="grid"></div>
 
@@ -129,12 +141,14 @@ static const char WEB_UI_HTML[] PROGMEM = R"HTML(
           <div><input type="number" min="0" step="10" id="receiverDelay"></div>
           <button class="btn mini" onclick="saveReceiverDelay()">Save</button>
         </div>
+        <label style="margin-top:12px">Beam-present signal level — point the laser at the receiver; if it still shows BROKEN, flip this</label>
+        <button class="btn ghost" id="receiverBeam" data-high="1" onclick="toggleReceiverBeam()">Beam present = HIGH</button>
       </div>
     </div>
 
   </div>
 
-  <!-- Bark notification toggles — sit directly on top of the General Info log -->
+  <!-- Bark notification toggles (master switch + per-source + server config) -->
   <div class="section">
     <div class="card" id="barkCard" style="display:none">
       <h2>🔔 Notifications <span class="badge off" id="barkMasterBadge">OFF</span></h2>
@@ -156,18 +170,6 @@ static const char WEB_UI_HTML[] PROGMEM = R"HTML(
         <button class="btn save" onclick="saveBarkConfig()">Save server settings</button>
         <div class="meta" id="barkMsg"></div>
       </div>
-    </div>
-  </div>
-
-  <!-- Unified "General Info" event log -->
-  <div class="section">
-    <div class="card">
-      <div class="loghead">
-        <h2 style="margin:0">📋 General Info</h2>
-        <button class="btn" onclick="clearLog()">Clear log</button>
-      </div>
-      <div class="meta" style="margin:0 0 8px">Relay, laser, motion &amp; beam events — newest first.</div>
-      <div class="log" id="log"><div class="empty">Waiting for events…</div></div>
     </div>
   </div>
 
@@ -283,6 +285,22 @@ function updateLaser(l) {
 async function saveMotionDelay()   { render(await api(`/api/motion/delay?ms=${document.getElementById('motionDelay').value||0}`)); }
 async function saveReceiverDelay() { render(await api(`/api/receiver/delay?ms=${document.getElementById('receiverDelay').value||0}`)); }
 
+// Flip the beam-present signal level (fixes an inverted receiver module live).
+async function toggleReceiverBeam() {
+  const b = document.getElementById('receiverBeam');
+  const next = b.dataset.high === '1' ? 0 : 1;
+  render(await api(`/api/receiver/config?beamHigh=${next}`));
+}
+
+// Reflect the persisted beam polarity on the toggle button.
+function updateReceiverBeam(r) {
+  const b = document.getElementById('receiverBeam');
+  if (!b || !r || typeof r.beamHigh === 'undefined') return;
+  b.dataset.high = r.beamHigh ? '1' : '0';
+  b.textContent = 'Beam present = ' + (r.beamHigh ? 'HIGH' : 'LOW');
+  b.classList.toggle('active', !!r.beamHigh);
+}
+
 function updateSensor(prefix, s, onLabel, offLabel, onCls) {
   const card = document.getElementById(prefix + 'Card');
   if (!s || !s.enabled) { if (card) card.style.display = 'none'; return; }
@@ -380,6 +398,7 @@ function render(data) {
   updateLaser(data.laser);
   updateSensor('motion', data.motion, 'MOTION', 'CLEAR', 'motion');
   updateSensor('receiver', data.receiver, 'BROKEN', 'INTACT', 'broken');
+  updateReceiverBeam(data.receiver);
   updateBark(data.bark);
 }
 

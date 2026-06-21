@@ -67,6 +67,22 @@ void sensorSetDelay(Sensor& s, unsigned long ms) {
   Serial.printf("[%s] detection delay -> %lu ms\n", s.tag, ms);
 }
 
+void sensorSetInput(Sensor& s, uint8_t inputMode, bool alertHigh) {
+  if (!s.enabled) return;
+  s.inputMode = inputMode;
+  s.alertHigh = alertHigh;
+  pinMode(s.pin, s.inputMode);                 // re-apply the pull (UP<->DOWN)
+  bool raw = digitalRead(s.pin) == HIGH;
+  s.curState = (raw == s.alertHigh);           // re-seed quietly (no event)
+  s.rawLast  = raw;
+  s.rawSince = s.lastPoll = millis();
+  const char* pull = inputMode == INPUT_PULLUP ? "PULLUP"
+                   : inputMode == INPUT_PULLDOWN ? "PULLDOWN" : "NONE";
+  Serial.printf("[%s] input reconfigured: %s, alert on %s (raw %s -> %s)\n",
+                s.tag, pull, alertHigh ? "HIGH" : "LOW",
+                raw ? "HIGH" : "LOW", s.curState ? "ALERT" : "clear");
+}
+
 String sensorStatusJson(const Sensor& s) {
   if (!s.enabled) return String("{\"enabled\":false}");
   String j = "{\"enabled\":true";

@@ -438,6 +438,22 @@ void handleReceiverDelay() {
   sendStatus();
 }
 
+// POST/GET /api/receiver/config?beamHigh=0|1 -> set + persist the beam-present
+// signal level (this also flips the input pull). Use it to correct an inverted
+// laser-receiver module live — watch the card's "Signal" readout flip with the
+// beam — without reflashing.
+void handleReceiverConfig() {
+  if (!receiverEnabled()) return sendError(400, "receiver not available");
+  if (server.hasArg("beamHigh")) {
+    String v = server.arg("beamHigh");
+    bool high = (v == "1" || v == "true" || v == "on");
+    receiverSetBeamHigh(high);
+    prefs.putBool("rx_beam", high);
+    logEvent(LOG_BEAM, false, high ? "Beam-present level -> HIGH" : "Beam-present level -> LOW");
+  }
+  sendStatus();
+}
+
 // POST/GET /api/bark?source=relay1|relay2|motion|laser&enabled=1|0 -> flip a
 // per-source push toggle and persist it.
 void handleBark() {
@@ -558,6 +574,7 @@ void setupRoutes() {
   onGetPost("/api/log/clear", handleLogClear);
   onGetPost("/api/motion/delay", handleMotionDelay);
   onGetPost("/api/receiver/delay", handleReceiverDelay);
+  onGetPost("/api/receiver/config", handleReceiverConfig);
   onGetPost("/api/bark", handleBark);
   onGetPost("/api/bark/config", handleBarkConfig);
 
@@ -722,9 +739,10 @@ void setup() {
   motionBegin();   // PIR input (no-op when PIR_ENABLED is 0)
   receiverBegin(); // laser-beam receiver (no-op when RECEIVER_ENABLED is 0)
 
-  // Restore persisted detection delays + per-source Bark toggles.
+  // Restore persisted detection delays, receiver polarity + per-source Bark toggles.
   motionSetDelay(prefs.getULong("pir_delay", PIR_DEFAULT_DELAY_MS));
   receiverSetDelay(prefs.getULong("rx_delay", RECEIVER_DEFAULT_DELAY_MS));
+  receiverSetBeamHigh(prefs.getBool("rx_beam", RECEIVER_BEAM_HIGH));
   barkBegin(prefs);
 
   logEvent(LOG_SYSTEM, false, "Device booted v" FW_VERSION);

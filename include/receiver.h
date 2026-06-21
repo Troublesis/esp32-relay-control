@@ -29,6 +29,15 @@ bool receiverActive();
 void          receiverSetDelay(unsigned long ms);
 unsigned long receiverDelay();
 
+// Beam-present signal level (runtime-adjustable, persisted by the caller).
+//   true  = the receiver reads HIGH while the beam lands on it (RECEIVER_BEAM_HIGH)
+//   false = it reads LOW while the beam lands on it
+// Flipping this also swaps the input pull (PULLDOWN<->PULLUP) so a disconnected
+// sensor still fails safe to "beam broken". Use it to correct an inverted laser
+// receiver module live, without reflashing.
+void receiverSetBeamHigh(bool high);
+bool receiverBeamHigh();
+
 // Receiver object for /api/status:
 //   {"enabled":..,"active":..,"count":..,"lastSeq":..,"delay":..}
 String receiverStatusJson();

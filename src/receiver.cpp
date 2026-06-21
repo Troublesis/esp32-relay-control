@@ -15,6 +15,11 @@
 //   beam HIGH  -> alert LOW  -> INPUT_PULLDOWN (idle reads LOW  = broken)
 //   beam LOW   -> alert HIGH -> INPUT_PULLUP   (idle reads HIGH = broken)
 
+// Runtime beam-present level (defaults to the config.h value; overridden by the
+// persisted setting at boot and by /api/receiver/config live). beamHigh decides
+// both the alert polarity and the input pull — see applyBeamPolarity().
+static bool beamHigh = RECEIVER_BEAM_HIGH;
+
 static Sensor beam = {
   /* enabled       */ RECEIVER_ENABLED,
   /* pin           */ RECEIVER_PIN,
@@ -33,10 +38,28 @@ static Sensor beam = {
   /* runtime ...   */ false, false, 0, 0, 0, 0, 0,
 };
 
+// Map the beam-present level onto the generic Sensor's alert polarity + pull:
+//   beam HIGH -> alert LOW  -> INPUT_PULLDOWN (idle/disconnected reads LOW  = broken)
+//   beam LOW  -> alert HIGH -> INPUT_PULLUP   (idle/disconnected reads HIGH = broken)
+static void applyBeamPolarity() {
+  sensorSetInput(beam, beamHigh ? INPUT_PULLDOWN : INPUT_PULLUP, beamHigh ? false : true);
+}
+
 void          receiverBegin()                 { sensorBegin(beam); }
 void          receiverUpdate()                { sensorUpdate(beam); }
 bool          receiverEnabled()               { return beam.enabled; }
 bool          receiverActive()                { return sensorActive(beam); }
 void          receiverSetDelay(unsigned long ms) { sensorSetDelay(beam, ms); }
 unsigned long receiverDelay()                 { return sensorDelay(beam); }
-String        receiverStatusJson()            { return sensorStatusJson(beam); }
+void          receiverSetBeamHigh(bool high)  { beamHigh = high; applyBeamPolarity(); }
+bool          receiverBeamHigh()              { return beamHigh; }
+
+// sensorStatusJson + the runtime beam-present level, so the WebUI can show and
+// flip the polarity. Pass through verbatim when the receiver is compiled out.
+String receiverStatusJson() {
+  String j = sensorStatusJson(beam);
+  if (!beam.enabled) return j;          // "{\"enabled\":false}"
+  j.remove(j.length() - 1);             // drop the trailing '}'
+  j += ",\"beamHigh\":" + String(beamHigh ? 1 : 0) + "}";
+  return j;
+}

@@ -55,5 +55,12 @@ bool sensorActive(const Sensor& s);
 unsigned long sensorDelay(const Sensor& s);
 void          sensorSetDelay(Sensor& s, unsigned long ms);
 
+// Re-apply the input wiring at runtime: pull mode (INPUT_PULLUP/PULLDOWN/INPUT)
+// and which raw level counts as "alert". Re-runs pinMode() and re-seeds the
+// debounced state from a fresh read (no event logged). Lets a wrapper flip a
+// sensor's polarity live — e.g. correcting an inverted laser receiver without a
+// reflash.
+void sensorSetInput(Sensor& s, uint8_t inputMode, bool alertHigh);
+
 // {"enabled":..,"active":..,"count":..,"lastSeq":..,"delay":..}
 String sensorStatusJson(const Sensor& s);
