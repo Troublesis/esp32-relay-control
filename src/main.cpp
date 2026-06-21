@@ -706,14 +706,14 @@ void printPinMap() {
 void setup() {
   Serial.begin(115200);
   delay(500);
-  Serial.println("\n=== ESP32 Relay + Laser Controller v" FW_VERSION " ===");
+  Serial.println("\n=== ESP32 Sensor Control v" FW_VERSION " ===");
   printPinMap();
 
   prefs.begin("relay", false);
 
 #if OLED_ENABLED
   displayBegin();
-  displaySplash("Relay", "starting...");
+  displaySplash("Sensor", "starting...");
 #endif
 
   for (int i = 0; i < 2; i++) {
@@ -748,7 +748,7 @@ void setup() {
   logEvent(LOG_SYSTEM, false, "Device booted v" FW_VERSION);
 
 #if OLED_ENABLED
-  displaySplash("Relay", "connecting WiFi");
+  displaySplash("Sensor", "connecting WiFi");
 #endif
 
   if (!connectWiFi()) startAPMode(); // fall back to setup hotspot

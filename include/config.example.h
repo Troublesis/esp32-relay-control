@@ -17,9 +17,9 @@
 #define WIFI_PASSWORD  "YOUR_WIFI_PASSWORD"
 
 // Hostname for mDNS. Once connected, the UI is reachable at http://<HOST>.local
-#define DEVICE_HOSTNAME "relay"
+#define DEVICE_HOSTNAME "sensor"
 
-// Append a lowercase MAC-derived suffix to DEVICE_HOSTNAME (e.g. "relay-3a9c")
+// Append a lowercase MAC-derived suffix to DEVICE_HOSTNAME (e.g. "sensor-3a9c")
 // so multiple identical boards stay unique on the network. The same name is
 // used for the mDNS/OTA hostname AND the AP setup hotspot SSID. Set 0 to use
 // DEVICE_HOSTNAME verbatim.
@@ -175,7 +175,7 @@
 #define BARK_TIMEOUT_MS  3000
 // Fallback only: the push normally opens the device's live LAN IP (http://<ip>/),
 // which resolves on phones; this is used just if WiFi is down when sending.
-#define BARK_OPEN_URL    "http://relay.local/"
+#define BARK_OPEN_URL    "http://sensor.local/"
 
 // Per-source titles + first-boot enable defaults (1 = notify, 0 = silent).
 #define BARK_MOTION_TITLE   "Human Motion Detected"

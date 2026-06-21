@@ -17,7 +17,7 @@ struct DisplayInfo {
   bool laserEnabled;          // laser-beam receiver compiled in
   bool laserActive;           // beam currently broken (not received)
   const char* version;
-  String hostname;            // mDNS name for the footer (e.g. "relay-3a9c")
+  String hostname;            // mDNS name for the footer (e.g. "sensor-3a9c")
 };
 
 // Initialise the I2C OLED. Returns false if no panel responds (rendering then

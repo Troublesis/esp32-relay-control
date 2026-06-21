@@ -10,7 +10,7 @@ static const char WEB_UI_HTML[] PROGMEM = R"HTML(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ESP32 Relay Control</title>
+<title>ESP32 Sensor Control</title>
 <style>
   :root { --bg:#0f172a; --card:#1e293b; --muted:#94a3b8; --on:#22c55e; --off:#ef4444; --accent:#3b82f6; }
   * { box-sizing:border-box; }
@@ -78,7 +78,7 @@ static const char WEB_UI_HTML[] PROGMEM = R"HTML(
 </head>
 <body>
   <header>
-    <h1>⚡ ESP32 Relay Control</h1>
+    <h1>⚡ ESP32 Sensor Control</h1>
     <div class="wifi" id="wifi">connecting…</div>
   </header>
 

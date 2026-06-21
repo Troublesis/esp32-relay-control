@@ -15,7 +15,7 @@ PlatformIO's `pio` is not on `PATH`; invoke it at `~/.platformio/penv/bin/pio`.
 ```bash
 ~/.platformio/penv/bin/pio run                          # build
 ~/.platformio/penv/bin/pio run -t upload                # build + flash over USB
-~/.platformio/penv/bin/pio run -t upload --upload-port relay.local  # OTA flash (espota)
+~/.platformio/penv/bin/pio run -t upload --upload-port sensor.local  # OTA flash (espota)
 ~/.platformio/penv/bin/pio device monitor               # serial @ 115200
 ~/.platformio/penv/bin/pio run -t clean                 # clean build artifacts
 ```
@@ -36,7 +36,7 @@ Headers in `include/`, logic in `src/`. All user-tunable config lives in `config
 - **`include/display.h` + `src/display.cpp`** — OLED module, decoupled via a `DisplayInfo` snapshot struct (no direct access to relay/WiFi globals).
 - **`include/timeutil.h`** — header-only `syncedEpoch()` / `formatEpoch()` NTP-time helpers shared by the log and Bark.
 - **`include/eventlog.h` + `src/eventlog.cpp`** — unified "General Info" ring buffer (`logEvent`/`logJson`/`logClear`). Every subsystem writes here; the WebUI fetches it incrementally by seq.
-- **`include/bark.h` + `src/bark.cpp`** — one Bark push client with **four independent persisted toggles** (`BARK_SRC_RELAY1/RELAY2/MOTION/LASER`), a **master on/off kill switch** over all sources, and a **runtime-editable push URL + device key** (persisted, override the `config.h` defaults; the key is never echoed back over the API). Callers pass title+body; the module appends device/time/URL.
+- **`include/bark.h` + `src/bark.cpp`** — one Bark push client with **four independent persisted toggles** (`BARK_SRC_RELAY1/RELAY2/MOTION/LASER`), a **master on/off kill switch** over all sources, and a **runtime-editable push URL + device key** (persisted, override the `config.h` defaults; the key is never echoed back over the API). Callers pass title+body; the module appends device/time/URL plus a smart "Last trigger" line (per-source time since the previous push, e.g. `3m 20s ago`).
 - **`include/sensor.h` + `src/sensor.cpp`** — generic debounced digital-input `Sensor` (poll → debounce → detection-delay cooldown → `logEvent` + `barkSend`). The single home for edge/debounce logic.
 - **`include/motion.h` + `src/motion.cpp`** — PIR sensor: a thin named wrapper configuring one `Sensor` (alert = motion HIGH, `LOG_MOTION`, `BARK_SRC_MOTION`).
 - **`include/receiver.h` + `src/receiver.cpp`** — laser-beam receiver: a thin named wrapper configuring one `Sensor` (alert = beam broken, `LOG_BEAM`, `BARK_SRC_LASER`). The beam-present signal level is **runtime-invertible** (`receiverSetBeamHigh()`, persisted as `rx_beam`): flipping it swaps both the alert polarity and the input pull (PULLDOWN↔PULLUP) live via `sensorSetInput()`, so an inverted/open-collector module can be corrected from the WebUI without a reflash.

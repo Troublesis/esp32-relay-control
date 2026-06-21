@@ -1,4 +1,4 @@
-# ESP32 Dual Relay Controller
+# ESP32 Sensor Control
 
 WiFi-enabled firmware for an ESP32 that controls **two relays** from a built-in
 web interface and a JSON HTTP API (usable as webhooks). Each relay can run on an
@@ -8,7 +8,7 @@ and can be changed live — no re-flashing needed.
 - 🌐 Responsive WebUI (no internet/CDN required — fully self-contained)
 - 🔗 GET/POST REST API + webhook endpoints for home automation
 - 💾 Per-relay timing + mode saved to flash (survives reboots)
-- 📶 mDNS (`http://relay.local/`) + auto-reconnect on WiFi drop
+- 📶 mDNS (`http://sensor.local/`) + auto-reconnect on WiFi drop
 - 🆕 **AP setup hotspot** — provision WiFi from your phone, no re-flashing
 - ⬆️ **OTA updates** — flash new firmware over the air (browser upload *or* `espota`)
 - 🖥️ Optional **0.96" OLED** status display
@@ -72,7 +72,7 @@ This is a [PlatformIO](https://platformio.org/) project (board: `esp32dev`).
    ```c
    #define WIFI_SSID      "YOUR_WIFI_SSID"     // or leave blank & use AP setup
    #define WIFI_PASSWORD  "YOUR_WIFI_PASSWORD"
-   #define DEVICE_HOSTNAME "relay"             // → http://relay.local/
+   #define DEVICE_HOSTNAME "sensor"            // → http://sensor.local/
    ```
    `include/config.h` is gitignored; `include/config.example.h` is the committed template.
 
@@ -83,21 +83,21 @@ This is a [PlatformIO](https://platformio.org/) project (board: `esp32dev`).
    ```
    > If `pio` isn't on your PATH, use `~/.platformio/penv/bin/pio`.
 
-3. **Open the UI** at `http://relay.local/` or the IP shown in the serial log / OLED.
+3. **Open the UI** at `http://sensor.local/` or the IP shown in the serial log / OLED.
 
 ## First-time WiFi setup (AP mode)
 
 If the device can't join WiFi (wrong credentials, out of range, or none set), it
 starts its own **setup hotspot**:
 
-1. On your phone/laptop, join the WiFi network **`Relay-Setup`** (open by default).
+1. On your phone/laptop, join the WiFi network **`sensor`** (open by default).
 2. A captive portal opens automatically (or browse to `http://192.168.4.1/`).
 3. Tap **Scan**, pick your network, enter the password, **Save & Connect**.
 4. The device reboots and joins your network. Reconnect your phone to normal WiFi
-   and open `http://relay.local/`.
+   and open `http://sensor.local/`.
 
 Saved credentials live in flash and override the `config.h` defaults. To forget
-them: `curl -X POST http://relay.local/api/wifi/reset` (device reboots back into
+them: `curl -X POST http://sensor.local/api/wifi/reset` (device reboots back into
 AP mode). You can also change WiFi anytime from the **WiFi** card in the WebUI.
 
 ## Building firmware for OTA updates
@@ -110,8 +110,8 @@ compiled `.bin` file. You do **not** need USB after the initial flash.
 - [PlatformIO](https://platformio.org/install) installed (VS Code extension or CLI).
 - A clone of this repo on your development machine:
   ```bash
-  git clone https://github.com/Troublesis/esp32-relay-control.git
-  cd esp32-relay-control
+  git clone https://github.com/Troublesis/esp32-control.git
+  cd esp32-control
   cp include/config.example.h include/config.h
   # edit include/config.h with your settings (optional — the device already has them saved)
   ```
@@ -132,7 +132,7 @@ That file is what you upload to the device.
 
 ### Upload via browser
 
-1. Open **`http://relay.local/update`** (or the device IP).
+1. Open **`http://sensor.local/update`** (or the device IP).
 2. Click **Choose file**, select `.pio/build/esp32dev/firmware.bin`.
 3. Click **Flash firmware** — you'll see a progress bar.
 4. The device reboots automatically when done.
@@ -140,7 +140,7 @@ That file is what you upload to the device.
 ### Upload via curl
 
 ```bash
-curl -F "firmware=@.pio/build/esp32dev/firmware.bin" http://relay.local/update
+curl -F "firmware=@.pio/build/esp32dev/firmware.bin" http://sensor.local/update
 ```
 
 ### Upload via PlatformIO (espota)
@@ -149,10 +149,10 @@ If `OTA_PASSWORD` is set, pass it via `--upload-password`:
 
 ```bash
 # No password
-pio run -t upload --upload-port relay.local
+pio run -t upload --upload-port sensor.local
 
 # With password
-pio run -t upload --upload-port relay.local --upload-password YOUR_PASSWORD
+pio run -t upload --upload-port sensor.local --upload-password YOUR_PASSWORD
 ```
 
 ### Version bump (optional)
@@ -209,22 +209,22 @@ plain browser URL) works. Durations are in **seconds**. Responses are JSON.
 
 ```bash
 # Turn relay 1 on
-curl "http://relay.local/webhook?relay=1&action=on"
+curl "http://sensor.local/webhook?relay=1&action=on"
 
 # Toggle relay 2
-curl "http://relay.local/api/control?relay=2&action=toggle"
+curl "http://sensor.local/api/control?relay=2&action=toggle"
 
 # Put relay 2 on a 3s-on / 8s-off auto cycle
-curl "http://relay.local/api/settings?relay=2&onDuration=3&offDuration=8&mode=auto"
+curl "http://sensor.local/api/settings?relay=2&onDuration=3&offDuration=8&mode=auto"
 
 # Read state
-curl "http://relay.local/api/status"
+curl "http://sensor.local/api/status"
 
 # Read the full motion history (since=0 returns everything buffered)
-curl "http://relay.local/api/motion/log?since=0"
+curl "http://sensor.local/api/motion/log?since=0"
 
 # Clear the motion log
-curl -X POST "http://relay.local/api/motion/clear"
+curl -X POST "http://sensor.local/api/motion/clear"
 ```
 
 ### `/api/status` response

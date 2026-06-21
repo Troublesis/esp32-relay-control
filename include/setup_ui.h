@@ -9,7 +9,7 @@ static const char SETUP_HTML[] PROGMEM = R"HTML(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Relay · WiFi Setup</title>
+<title>Sensor · WiFi Setup</title>
 <style>
   body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
          background:#0f172a; color:#e2e8f0; display:flex; min-height:100vh; align-items:center; justify-content:center; padding:16px; }
@@ -26,7 +26,7 @@ static const char SETUP_HTML[] PROGMEM = R"HTML(
 </head>
 <body>
   <div class="card">
-    <h1>⚡ Relay WiFi Setup</h1>
+    <h1>⚡ Sensor WiFi Setup</h1>
     <p>Connect this device to your network.</p>
     <label>Network (SSID)</label>
     <input list="nets" id="ssid" placeholder="Your WiFi name" autocomplete="off">
@@ -57,7 +57,7 @@ async function save() {
   try {
     const r = await fetch('/api/wifi', { method:'POST', body });
     const j = await r.json();
-    if (j.ok) { m.className='msg ok'; m.textContent='Saved! Rebooting — reconnect to your normal WiFi, then open http://relay.local/'; }
+    if (j.ok) { m.className='msg ok'; m.textContent='Saved! Rebooting — reconnect to your normal WiFi, then open http://sensor.local/'; }
     else { m.className='msg err'; m.textContent = j.error || 'Save failed'; }
   } catch(e) { m.className='msg ok'; m.textContent='Saved — device is rebooting.'; }
 }
@@ -74,7 +74,7 @@ static const char OTA_HTML[] PROGMEM = R"HTML(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Relay · Firmware Update</title>
+<title>Sensor · Firmware Update</title>
 <style>
   body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
          background:#0f172a; color:#e2e8f0; display:flex; min-height:100vh; align-items:center; justify-content:center; padding:16px; }

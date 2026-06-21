@@ -24,3 +24,19 @@ inline String formatEpoch(time_t epoch) {
   strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tmv);
   return String(buf);
 }
+
+// Smart, compact human duration for a millisecond span: the largest one or two
+// units that actually matter — "45s", "3m 20s", "2h 15m", "3d 4h". Sub-second
+// spans render as "0s". Used by Bark to show "time since last trigger".
+inline String formatDuration(unsigned long ms) {
+  unsigned long totalSec = ms / 1000UL;
+  unsigned long days  = totalSec / 86400UL;
+  unsigned long hours = (totalSec % 86400UL) / 3600UL;
+  unsigned long mins  = (totalSec % 3600UL) / 60UL;
+  unsigned long secs  = totalSec % 60UL;
+
+  if (days > 0)  return String(days)  + "d " + String(hours) + "h";
+  if (hours > 0) return String(hours) + "h " + String(mins)  + "m";
+  if (mins > 0)  return String(mins)  + "m " + String(secs)  + "s";
+  return String(secs) + "s";
+}

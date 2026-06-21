@@ -26,6 +26,10 @@ static bool   masterOn  = true;
 static String pushUrl   = BARK_PUSH_URL;
 static String deviceKey = BARK_DEVICE_KEY;
 
+// millis() of the last notification actually sent per source, 0 = none yet this
+// boot. Lets barkSend() report a "time since last trigger" smart-duration line.
+static unsigned long lastTriggerMs[BARK_SRC_COUNT] = {0};
+
 // Short, stable NVS keys (the Preferences namespace caps key length at 15).
 static const char* nvsKeyFor(int s) {
   switch (s) {
@@ -164,8 +168,19 @@ void barkSend(int s, const String& title, const String& body) {
     return;
   }
 
+  // Smart "time since the last push from this source" line, then re-arm the
+  // clock for next time. 0 means this is the first trigger since boot.
+  String b = body;
+  unsigned long now = millis();
+  if (lastTriggerMs[s] != 0) {
+    b += "\nLast trigger: " + formatDuration(now - lastTriggerMs[s]) + " ago";
+  } else {
+    b += "\nLast trigger: first since boot";
+  }
+  lastTriggerMs[s] = now;
+
   http.addHeader("Content-Type", "application/json; charset=utf-8");
-  int code = http.POST(buildPayload(title, body));
+  int code = http.POST(buildPayload(title, b));
   http.end();
 
   if (code > 0 && code < 400) Serial.printf("[bark] notification sent (HTTP %d)\n", code);

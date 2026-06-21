@@ -182,7 +182,7 @@ void displayRender(const DisplayInfo& info) {
   oled.setTextSize(1);
   oled.setTextColor(SSD1306_WHITE);
   oled.setCursor(0, 0);
-  oled.print("Relay v");
+  oled.print("Sensor v");
   oled.print(info.version);
 
   // top-right status tag

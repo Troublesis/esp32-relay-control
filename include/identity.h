@@ -7,7 +7,7 @@
 // ============================================================================
 // Single source of truth for the name this board uses on the network. It is
 // DEVICE_HOSTNAME, optionally suffixed with a lowercase tag derived from the
-// chip's MAC (e.g. "relay-3a9c") when HOSTNAME_AUTO_SUFFIX is set, so several
+// chip's MAC (e.g. "sensor-3a9c") when HOSTNAME_AUTO_SUFFIX is set, so several
 // identical boards flashed with the same firmware stay unique on the LAN.
 //
 // The same value drives the mDNS name, the WiFi/OTA hostname AND the AP setup
